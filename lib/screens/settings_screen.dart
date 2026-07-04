@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:random_avatar/random_avatar.dart';
 import 'package:provider/provider.dart';
 import '../core/theme/app_colors.dart';
 import '../core/app_notification.dart';
@@ -102,9 +103,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(30),
-                      child: Image.network(
-                        'https://api.dicebear.com/7.x/lorelei/png?seed=Minh',
-                        fit: BoxFit.cover,
+                      child: RandomAvatar(
+                        'Minh',
+                        trBackground: false,
+                        height: 60,
+                        width: 60,
                       ),
                     ),
                   ),

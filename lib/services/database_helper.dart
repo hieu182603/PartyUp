@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
@@ -5,6 +7,7 @@ import 'package:path/path.dart';
 import '../models/player_group.dart';
 import '../models/player.dart';
 import '../models/game_content.dart';
+import '../models/game_session.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -23,17 +26,106 @@ class DatabaseHelper {
       // Use web factory
       databaseFactory = databaseFactoryFfiWeb;
       final path = filePath; // Web uses local storage, just name is fine
-      return await openDatabase(path, version: 1, onCreate: _createDB);
+      return await openDatabase(path, version: 13, onCreate: _createDB, onUpgrade: _onUpgrade);
     } else {
       final dbPath = await getDatabasesPath();
       final path = join(dbPath, filePath);
-      return await openDatabase(path, version: 1, onCreate: _createDB);
+      return await openDatabase(path, version: 13, onCreate: _createDB, onUpgrade: _onUpgrade);
+    }
+  }
+
+  Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS global_players (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT UNIQUE NOT NULL,
+          total_score INTEGER DEFAULT 0,
+          total_penalty INTEGER DEFAULT 0,
+          games_played INTEGER DEFAULT 0,
+          created_at TEXT NOT NULL
+        )
+      ''');
+    }
+    if (oldVersion < 3) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS game_sessions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          group_id INTEGER NOT NULL,
+          game_mode TEXT NOT NULL,
+          started_at TEXT NOT NULL,
+          ended_at TEXT,
+          FOREIGN KEY (group_id) REFERENCES player_groups (id) ON DELETE CASCADE
+        )
+      ''');
+    }
+    if (oldVersion < 4) {
+      // Add is_favorite column to game_contents
+      try {
+        await db.execute('ALTER TABLE game_contents ADD COLUMN is_favorite INTEGER DEFAULT 0');
+      } catch (e) {
+        // Column might already exist
+      }
+    }
+    if (oldVersion < 5) {
+      // Add category column to game_contents
+      try {
+        await db.execute('ALTER TABLE game_contents ADD COLUMN category TEXT DEFAULT "Tổng hợp"');
+      } catch (e) {}
+    }
+    if (oldVersion < 6) {
+      // Add session_scores table
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS session_scores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL,
+            player_name TEXT NOT NULL,
+            player_avatar TEXT,
+            score INTEGER NOT NULL,
+            FOREIGN KEY (session_id) REFERENCES game_sessions (id) ON DELETE CASCADE
+          )
+        ''');
+      } catch (e) {}
+    }
+    if (oldVersion < 12) {
+      // Recreate game_contents table to ensure all new columns exist (penalty_text, points)
+      await db.execute('DROP TABLE IF EXISTS game_contents');
+      await db.execute('''
+        CREATE TABLE game_contents (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          content TEXT NOT NULL,
+          type TEXT NOT NULL,
+          level TEXT NOT NULL,
+          category TEXT DEFAULT 'Tổng hợp',
+          is_custom INTEGER DEFAULT 0,
+          is_active INTEGER DEFAULT 1,
+          is_favorite INTEGER DEFAULT 0,
+          penalty_text TEXT,
+          points INTEGER
+        )
+      ''');
+      await _insertDefaultGameContent(db);
+    }
+    if (oldVersion < 13) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS session_turns (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id INTEGER NOT NULL,
+          round_number INTEGER NOT NULL,
+          player_name TEXT NOT NULL,
+          content TEXT NOT NULL,
+          points_change INTEGER NOT NULL,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (session_id) REFERENCES game_sessions (id) ON DELETE CASCADE
+        )
+      ''');
     }
   }
 
   Future _createDB(Database db, int version) async {
     await db.execute('''
-      CREATE TABLE player_groups (
+      CREATE TABLE IF NOT EXISTS player_groups (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         created_at TEXT NOT NULL
@@ -41,7 +133,18 @@ class DatabaseHelper {
     ''');
 
     await db.execute('''
-      CREATE TABLE players (
+      CREATE TABLE IF NOT EXISTS global_players (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE NOT NULL,
+        total_score INTEGER DEFAULT 0,
+        total_penalty INTEGER DEFAULT 0,
+        games_played INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS players (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         group_id INTEGER NOT NULL,
         name TEXT NOT NULL,
@@ -53,20 +156,22 @@ class DatabaseHelper {
     ''');
 
     await db.execute('''
-      CREATE TABLE game_contents (
+      CREATE TABLE IF NOT EXISTS game_contents (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         content TEXT NOT NULL,
         type TEXT NOT NULL,
         level TEXT NOT NULL,
+        category TEXT DEFAULT 'Tổng hợp',
         is_custom INTEGER DEFAULT 0,
         is_active INTEGER DEFAULT 1,
+        is_favorite INTEGER DEFAULT 0,
         penalty_text TEXT,
         points INTEGER
       )
     ''');
 
     await db.execute('''
-      CREATE TABLE game_sessions (
+      CREATE TABLE IF NOT EXISTS game_sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         group_id INTEGER NOT NULL,
         game_mode TEXT NOT NULL,
@@ -76,175 +181,85 @@ class DatabaseHelper {
       )
     ''');
 
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS session_scores (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER NOT NULL,
+        player_name TEXT NOT NULL,
+        player_avatar TEXT,
+        score INTEGER NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES game_sessions (id) ON DELETE CASCADE
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS session_turns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER NOT NULL,
+        round_number INTEGER NOT NULL,
+        player_name TEXT NOT NULL,
+        content TEXT NOT NULL,
+        points_change INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES game_sessions (id) ON DELETE CASCADE
+      )
+    ''');
+
     // Bơm dữ liệu mẫu
     await _insertDefaultGameContent(db);
   }
 
   Future _insertDefaultGameContent(Database db) async {
-    final contents = [
-      // THẬT (Truth)
-      GameContent(
-        content: 'Trong nhóm này, bạn tin tưởng ai nhất?',
-        type: 'truth',
-        level: 'fun',
-        penaltyText: 'Hát một bài hát thiếu nhi trong 30 giây',
-        points: 20,
-      ),
-      GameContent(
-        content: 'Lần xấu hổ nhất của bạn là gì?',
-        type: 'truth',
-        level: 'fun',
-        penaltyText: 'Nhảy lò cò và kêu cục ta cục tác 5 lần',
-        points: 20,
-      ),
-      GameContent(
-        content: 'Bạn đã từng tỏ tình thất bại bao giờ chưa?',
-        type: 'truth',
-        level: 'fun',
-        penaltyText: 'Đứng nghiêm chào kiểu bộ đội trong 20 giây',
-        points: 20,
-      ),
-      GameContent(
-        content: 'Có ai trong nhóm này mà bạn từng crush chưa?',
-        type: 'truth',
-        level: 'hardcore',
-        penaltyText: 'Nhắn tin cho crush hoặc người yêu cũ "Em/Anh nhớ anh/em"',
-        points: 20,
-      ),
-      GameContent(
-        content: 'Nói ra một bí mật mà bạn giấu bố mẹ.',
-        type: 'truth',
-        level: 'hardcore',
-        penaltyText: 'Múa quạt hoặc nhảy Tiktok trong 15 giây',
-        points: 20,
-      ),
-      GameContent(
-        content: 'Tật xấu lớn nhất của bạn khi ngủ là gì?',
-        type: 'truth',
-        level: 'fun',
-        penaltyText: 'Làm động tác như đang ngủ say và ngáy ngủ to 10 giây',
-        points: 20,
-      ),
-      GameContent(
-        content: 'Bạn từng giả vờ ốm để trốn học/trốn làm chưa?',
-        type: 'truth',
-        level: 'light',
-        penaltyText: 'Khen 3 người trong nhóm một câu chân thành nhất',
-        points: 20,
-      ),
-      GameContent(
-        content: 'Hãy kể về một lần bạn "bốc phét" bị phát hiện.',
-        type: 'truth',
-        level: 'fun',
-        penaltyText: 'Cho người bên phải bẹo má trong 10 giây',
-        points: 20,
-      ),
-      
-      // THÁCH (Dare)
-      GameContent(
-        content: 'Hát một bài hát thiếu nhi bằng giọng "chảy nước".',
-        type: 'dare',
-        level: 'fun',
-        penaltyText: 'Uống hết một cốc nước lọc liên tục không nghỉ',
-        points: 20,
-      ),
-      GameContent(
-        content: 'Múa quạt hoặc nhảy Tiktok trong 15 giây.',
-        type: 'dare',
-        level: 'fun',
-        penaltyText: 'Chống đẩy 10 cái tại chỗ',
-        points: 20,
-      ),
-      GameContent(
-        content: 'Chụp một tấm ảnh tự sướng làm mặt xấu nhất có thể và gửi vào group chat.',
-        type: 'dare',
-        level: 'hardcore',
-        penaltyText: 'Uống một hớp nước mắm hoặc ngậm chanh trong 10 giây',
-        points: 20,
-      ),
-      GameContent(
-        content: 'Khen từng người trong nhóm một câu (không được giả trân).',
-        type: 'dare',
-        level: 'light',
-        penaltyText: 'Đứng lò cò một chân trong 30 giây tiếp theo',
-        points: 20,
-      ),
-      GameContent(
-        content: 'Đổi avatar Facebook thành hình dìm của mình trong 1 ngày.',
-        type: 'dare',
-        level: 'hardcore',
-        penaltyText: 'Đứng dậy hô to "Tôi là kẻ ngốc nhất thế gian!" 3 lần',
-        points: 20,
-      ),
-      GameContent(
-        content: 'Nhắn tin cho người yêu cũ (hoặc crush) với nội dung "Em/Anh dạo này ổn không?".',
-        type: 'dare',
-        level: 'hardcore',
-        penaltyText: 'Mát-xa vai cho người ngồi bên phải trong 1 phút',
-        points: 20,
-      ),
-      GameContent(
-        content: 'Uống một ly nước lọc pha với một chút... nước mắm (hoặc chanh).',
-        type: 'dare',
-        level: 'hardcore',
-        penaltyText: 'Hát một đoạn nhạc rap bất kỳ',
-        points: 20,
-      ),
-      GameContent(
-        content: 'Đứng lên, chắp tay và hô to: "Tôi là kẻ ngốc nhất thế gian!" 3 lần.',
-        type: 'dare',
-        level: 'fun',
-        penaltyText: 'Để người bên trái vẽ một nét mực mèo lên má',
-        points: 20,
-      ),
-      GameContent(
-        content: 'Đưa điện thoại của bạn cho người bên phải, họ được quyền xem lịch sử duyệt web trong 30 giây.',
-        type: 'dare',
-        level: 'hardcore',
-        penaltyText: 'Kể chuyện cười hoặc làm trò cười trong 30 giây',
-        points: 20,
-      ),
+    try {
+      final String response = await rootBundle.loadString('assets/data/game_data.json');
+      final data = await json.decode(response);
 
-      // LUẬT BÍ MẬT (Rule)
-      GameContent(
-        content: 'Không được nói từ "Không".',
-        type: 'rule',
-        level: 'fun',
-        penaltyText: 'Nhảy múa tự do trong 15 giây',
-        points: 20,
-      ),
-      GameContent(
-        content: 'Phải kết thúc mỗi câu nói bằng từ "meo".',
-        type: 'rule',
-        level: 'fun',
-        penaltyText: 'Kêu tiếng mèo kêu meo meo 5 lần',
-        points: 20,
-      ),
-      GameContent(
-        content: 'Chỉ được dùng câu hỏi để giao tiếp.',
-        type: 'rule',
-        level: 'hardcore',
-        penaltyText: 'Đọc bảng chữ cái từ Z về A trong 20 giây',
-        points: 20,
-      ),
-      GameContent(
-        content: 'Khi ai đó gọi tên, bạn phải làm động tác chào cờ.',
-        type: 'rule',
-        level: 'fun',
-        penaltyText: 'Chống đẩy 5 cái',
-        points: 20,
-      ),
-      GameContent(
-        content: 'Không được cười lộ răng.',
-        type: 'rule',
-        level: 'hardcore',
-        penaltyText: 'Đóng vai một con khỉ trong 15 giây',
-        points: 20,
-      ),
-    ];
+      // Helper function to map category
+      String mapCategory(String rawCat) {
+        switch(rawCat) {
+          case 'Funny': return 'Hài hước';
+          case 'Friend': return 'Tình bạn';
+          case 'School': 
+          case 'University': return 'Học đường';
+          case 'Food': return 'Ẩm thực';
+          case 'Love': 
+          case 'Couple': return 'Tình yêu';
+          case 'Lifestyle': return 'Lifestyle';
+          case 'Office': return 'Công việc';
+          case 'Travel': return 'Du lịch';
+          case 'Movie': return 'Phim ảnh';
+          default: return 'Tổng hợp';
+        }
+      }
 
-    for (var content in contents) {
-      await db.insert('game_contents', content.toMap());
+      // Helper function to insert items
+      Future<void> insertItems(List<dynamic> items, String defaultType) async {
+        for (var item in items) {
+          final type = item['type'] ?? defaultType;
+          final category = mapCategory(item['category'] ?? 'Tổng hợp');
+          final content = item['content'] ?? '';
+          final penaltyText = item['penalty'] ?? '';
+          final level = item['difficulty'] ?? 'vui';
+          final point = item['point'] ?? 10;
+          
+          await db.insert('game_contents', {
+            'content': content,
+            'type': type,
+            'level': level,
+            'category': category,
+            'penalty_text': penaltyText,
+            'points': point,
+            'is_active': 1,
+          });
+        }
+      }
+
+      if (data['truths'] != null) await insertItems(data['truths'], 'truth');
+      if (data['dares'] != null) await insertItems(data['dares'], 'dare');
+      if (data['secret_rules'] != null) await insertItems(data['secret_rules'], 'rule');
+
+    } catch (e) {
+      print('Error loading game_data.json: $e');
     }
   }
 
@@ -252,6 +267,16 @@ class DatabaseHelper {
   Future<int> createGroup(PlayerGroup group) async {
     final db = await instance.database;
     return await db.insert('player_groups', group.toMap());
+  }
+
+  Future<void> updateGroup(PlayerGroup group) async {
+    final db = await instance.database;
+    await db.update(
+      'player_groups',
+      group.toMap(),
+      where: 'id = ?',
+      whereArgs: [group.id],
+    );
   }
 
   Future<List<PlayerGroup>> getGroups() async {
@@ -287,11 +312,173 @@ class DatabaseHelper {
     return await db.delete('players', where: 'id = ?', whereArgs: [id]);
   }
 
+  // Game Session Operations
+  Future<int> createGameSession(GameSession session) async {
+    final db = await instance.database;
+    return await db.insert('game_sessions', session.toMap());
+  }
+
+  Future<void> endSession(int sessionId, List<Player> finalPlayers) async {
+    final db = await database;
+    await db.update(
+      'game_sessions',
+      {'ended_at': DateTime.now().toIso8601String()},
+      where: 'id = ?',
+      whereArgs: [sessionId],
+    );
+    
+    // Lưu lại điểm số của người chơi cho ván này
+    for (var player in finalPlayers) {
+      await db.insert('session_scores', {
+        'session_id': sessionId,
+        'player_name': player.name,
+        'player_avatar': player.avatar ?? '',
+        'score': player.score,
+      });
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getGameHistory() async {
+    final db = await instance.database;
+    // Use session_scores for completed games; fall back to current players.score for incomplete ones
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT 
+        s.id, 
+        s.started_at, 
+        s.ended_at, 
+        g.name as group_name,
+        (SELECT COUNT(id) FROM players WHERE group_id = s.group_id) as player_count,
+        CASE 
+          WHEN (SELECT COUNT(*) FROM session_scores WHERE session_id = s.id) > 0
+            THEN (SELECT SUM(score) FROM session_scores WHERE session_id = s.id)
+          ELSE (SELECT SUM(score) FROM players WHERE group_id = s.group_id)
+        END as total_points,
+        (SELECT COUNT(*) FROM session_scores WHERE session_id = s.id) as has_session_scores
+      FROM game_sessions s
+      JOIN player_groups g ON s.group_id = g.id
+      ORDER BY s.started_at DESC
+    ''');
+    return maps;
+  }
+
+  Future<void> deleteSession(int sessionId) async {
+    final db = await instance.database;
+    await db.delete('session_scores', where: 'session_id = ?', whereArgs: [sessionId]);
+    await db.delete('game_sessions', where: 'id = ?', whereArgs: [sessionId]);
+  }
+
+  Future<void> clearAllHistory() async {
+    final db = await instance.database;
+    await db.delete('session_scores');
+    await db.delete('game_sessions');
+  }
+
+  Future<List<Map<String, dynamic>>> getSessionScores(int sessionId) async {
+    final db = await database;
+    return await db.query(
+      'session_scores',
+      where: 'session_id = ?',
+      whereArgs: [sessionId],
+      orderBy: 'score DESC',
+    );
+  }
+
+  // Session Turns
+  Future<void> insertSessionTurn(int sessionId, int roundNumber, String playerName, String content, int pointsChange) async {
+    final db = await database;
+    await db.insert('session_turns', {
+      'session_id': sessionId,
+      'round_number': roundNumber,
+      'player_name': playerName,
+      'content': content,
+      'points_change': pointsChange,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getSessionTurns(int sessionId) async {
+    final db = await database;
+    return await db.query(
+      'session_turns',
+      where: 'session_id = ?',
+      whereArgs: [sessionId],
+      orderBy: 'created_at ASC',
+    );
+  }
+
+  // Leaderboards
+
+
+  Future<List<Map<String, dynamic>>> getGroupLeaderboard() async {
+    final db = await database;
+    return await db.rawQuery('''
+      SELECT g.id, g.name, COALESCE(SUM(p.score), 0) as total_score
+      FROM player_groups g
+      LEFT JOIN players p ON g.id = p.group_id
+      GROUP BY g.id
+      ORDER BY total_score DESC
+    ''');
+  }
+
   // Game Content Operations
   Future<List<GameContent>> getContentsByType(String type) async {
     final db = await instance.database;
-    final result = await db.query('game_contents', where: 'type = ? AND is_active = 1', whereArgs: [type]);
+    final result = await db.query(
+      'game_contents',
+      where: 'type = ? AND is_active = 1',
+      whereArgs: [type],
+    );
     return result.map((json) => GameContent.fromMap(json)).toList();
+  }
+
+  Future<void> toggleFavoriteGameContent(int id, bool isFavorite) async {
+    final db = await instance.database;
+    await db.update(
+      'game_contents',
+      {'is_favorite': isFavorite ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<List<GameContent>> getFavoriteContents() async {
+    final db = await instance.database;
+    final result = await db.query(
+      'game_contents',
+      where: 'is_favorite = 1 AND is_active = 1',
+    );
+    return result.map((json) => GameContent.fromMap(json)).toList();
+  }
+
+  // Global Player Operations
+  Future<int> createGlobalPlayer(String name) async {
+    final db = await instance.database;
+    final data = {
+      'name': name,
+      'total_score': 0,
+      'total_penalty': 0,
+      'games_played': 0,
+      'created_at': DateTime.now().toIso8601String(),
+    };
+    return await db.insert('global_players', data, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  Future<void> addPointsToGlobalPlayer(String name, int scoreToAdd, int penaltyToAdd) async {
+    final db = await instance.database;
+    await db.rawUpdate('''
+      UPDATE global_players 
+      SET total_score = total_score + ?, 
+          total_penalty = total_penalty + ?
+      WHERE name = ?
+    ''', [scoreToAdd, penaltyToAdd, name]);
+  }
+
+  Future<List<Map<String, dynamic>>> getGlobalLeaderboard() async {
+    final db = await instance.database;
+    return await db.query(
+      'global_players',
+      orderBy: 'total_score DESC, total_penalty ASC',
+    );
   }
 
   Future close() async {

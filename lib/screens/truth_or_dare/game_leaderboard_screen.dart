@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:random_avatar/random_avatar.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/player_provider.dart';
 import '../../providers/truth_or_dare_provider.dart';
+import '../../services/database_helper.dart';
 import '../home_screen.dart';
 import 'result_screen.dart';
 
@@ -11,35 +13,35 @@ class GameLeaderboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final playerProvider = Provider.of<PlayerProvider>(context);
-    final todProvider = Provider.of<TruthOrDareProvider>(context);
-    final activePlayers = playerProvider.players;
+    final todProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final sessionId = todProvider.currentSessionId;
 
-    // Sort players by score descending
-    final sortedActive = List.from(activePlayers)..sort((a, b) => b.score.compareTo(a.score));
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: sessionId != null
+          ? DatabaseHelper.instance.getSessionScores(sessionId)
+          : Future.value(playerProvider.players
+              .map((p) => {'player_name': p.name, 'player_avatar': p.avatar ?? '', 'score': p.score})
+              .toList()),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
 
-    // Get podium players
-    String firstPlaceName = '';
-    int firstPlaceScore = 0;
-    String secondPlaceName = '';
-    int secondPlaceScore = 0;
-    String thirdPlaceName = '';
-    int thirdPlaceScore = 0;
+        final scores = snapshot.data ?? [];
+        // Sort by score descending
+        final sorted = List<Map<String, dynamic>>.from(scores)
+          ..sort((a, b) => (b['score'] as int).compareTo(a['score'] as int));
 
-    if (sortedActive.isNotEmpty) {
-      firstPlaceName = sortedActive[0].name;
-      firstPlaceScore = sortedActive[0].score;
-    }
-    if (sortedActive.length > 1) {
-      secondPlaceName = sortedActive[1].name;
-      secondPlaceScore = sortedActive[1].score;
-    }
-    if (sortedActive.length > 2) {
-      thirdPlaceName = sortedActive[2].name;
-      thirdPlaceScore = sortedActive[2].score;
-    }
-
-    final remainingPlayers = sortedActive.length > 3 ? sortedActive.sublist(3) : [];
+        final String firstPlaceName = sorted.isNotEmpty ? sorted[0]['player_name'] as String : '';
+        final int firstPlaceScore = sorted.isNotEmpty ? sorted[0]['score'] as int : 0;
+        final String secondPlaceName = sorted.length > 1 ? sorted[1]['player_name'] as String : '';
+        final int secondPlaceScore = sorted.length > 1 ? sorted[1]['score'] as int : 0;
+        final String thirdPlaceName = sorted.length > 2 ? sorted[2]['player_name'] as String : '';
+        final int thirdPlaceScore = sorted.length > 2 ? sorted[2]['score'] as int : 0;
+        final remainingPlayers = sorted.length > 3 ? sorted.sublist(3) : <Map<String, dynamic>>[];
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -162,7 +164,9 @@ class GameLeaderboardScreen extends StatelessWidget {
                             physics: const BouncingScrollPhysics(),
                             itemCount: remainingPlayers.length,
                             itemBuilder: (context, index) {
-                              final player = remainingPlayers[index];
+                              final p = remainingPlayers[index];
+                              final pName = p['player_name'] as String;
+                              final pScore = p['score'] as int;
                               final rank = index + 4;
 
                               return Container(
@@ -175,7 +179,6 @@ class GameLeaderboardScreen extends StatelessWidget {
                                 ),
                                 child: Row(
                                   children: [
-                                    // Rank Number
                                     Text(
                                       '$rank',
                                       style: const TextStyle(
@@ -185,25 +188,19 @@ class GameLeaderboardScreen extends StatelessWidget {
                                       ),
                                     ),
                                     const SizedBox(width: 16),
-                                    // Avatar
                                     ClipRRect(
                                       borderRadius: BorderRadius.circular(16),
                                       child: Container(
                                         width: 36,
                                         height: 36,
                                         color: const Color(0xFFF2F4F7),
-                                        child: Image.network(
-                                          'https://api.dicebear.com/7.x/lorelei/png?seed=${player.name}',
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) => const Icon(Icons.person),
-                                        ),
+                                        child: RandomAvatar(pName, trBackground: false, height: 36, width: 36),
                                       ),
                                     ),
                                     const SizedBox(width: 12),
-                                    // Name
                                     Expanded(
                                       child: Text(
-                                        player.name,
+                                        pName,
                                         style: const TextStyle(
                                           fontSize: 15,
                                           fontWeight: FontWeight.w800,
@@ -211,9 +208,8 @@ class GameLeaderboardScreen extends StatelessWidget {
                                         ),
                                       ),
                                     ),
-                                    // Score
                                     Text(
-                                      '${player.score}đ',
+                                      '$pScoređ',
                                       style: const TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w900,
@@ -226,14 +222,16 @@ class GameLeaderboardScreen extends StatelessWidget {
                             },
                           ),
                   ),
-                  const SizedBox(height: 16),
+                   const SizedBox(height: 16),
 
                   // Complete / Finish button
                   ElevatedButton(
                     onPressed: () async {
+                      final tod = Provider.of<TruthOrDareProvider>(context, listen: false);
+                      final pp = Provider.of<PlayerProvider>(context, listen: false);
                       // Reset game session and scores
-                      todProvider.reset();
-                      await playerProvider.resetScores();
+                      tod.reset();
+                      await pp.resetScores();
 
                       if (context.mounted) {
                         Navigator.pushAndRemoveUntil(
@@ -250,7 +248,7 @@ class GameLeaderboardScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(30),
                       ),
                       elevation: 6,
-                      shadowColor: const Color(0xFF7C5CFF).withOpacity(0.3),
+                      shadowColor: const Color(0xFF7C5CFF).withValues(alpha: 0.3),
                     ),
                     child: const Text(
                       'Hoàn thành',
@@ -269,6 +267,8 @@ class GameLeaderboardScreen extends StatelessWidget {
         ],
       ),
     );
+      }, // end FutureBuilder builder
+    ); // end FutureBuilder
   }
 
   Widget _buildPodiumColumn({
@@ -304,17 +304,18 @@ class GameLeaderboardScreen extends StatelessWidget {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
+                      color: Colors.black.withValues(alpha: 0.08),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
                   ],
                 ),
                 child: ClipOval(
-                  child: Image.network(
-                    'https://api.dicebear.com/7.x/lorelei/png?seed=$avatarSeed',
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.person),
+                  child: RandomAvatar(
+                    avatarSeed,
+                    trBackground: false,
+                    height: 64,
+                    width: 64,
                   ),
                 ),
               ),
@@ -372,7 +373,7 @@ class GameLeaderboardScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${score}đ',
+                  '$scoređ',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w900,

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
+import 'package:random_avatar/random_avatar.dart';
 import '../../providers/truth_or_dare_provider.dart';
+import '../../providers/game_content_provider.dart';
+import '../../models/game_content.dart';
+import '../../services/audio_service.dart';
 import '../../core/theme/app_colors.dart';
 import 'success_screen.dart';
 import 'skip_screen.dart';
@@ -213,9 +217,11 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(12),
-                                  child: Image.network(
-                                    'https://api.dicebear.com/7.x/lorelei/png?seed=${todProvider.currentPlayer?.name ?? ""}',
-                                    fit: BoxFit.cover,
+                                  child: RandomAvatar(
+                                    todProvider.currentPlayer?.name ?? "",
+                                    trBackground: false,
+                                    height: 24,
+                                    width: 24,
                                   ),
                                 ),
                               ),
@@ -296,18 +302,55 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Card Header Icon
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: primaryColor.withOpacity(0.1),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              isTruth ? Icons.help_outline_rounded : Icons.bolt_rounded,
-                              color: primaryColor,
-                              size: 32,
-                            ),
+                          // Card Header Icon & Favorite Button
+                          Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Align(
+                                alignment: Alignment.center,
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: primaryColor.withOpacity(0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    isTruth ? Icons.help_outline_rounded : Icons.bolt_rounded,
+                                    color: primaryColor,
+                                    size: 32,
+                                  ),
+                                ),
+                              ),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: Consumer<GameContentProvider>(
+                                  builder: (context, contentProvider, _) {
+                                    final isFav = contentProvider.favorites.any((c) => c.id == content.id);
+                                    return IconButton(
+                                      icon: Icon(
+                                        isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                        color: isFav ? const Color(0xFFFF5B7F) : AppColors.textSecondary.withOpacity(0.5),
+                                        size: 28,
+                                      ),
+                                      onPressed: () {
+                                        AudioService.instance.playSFX('tap.mp3');
+                                        contentProvider.toggleFavorite(GameContent(
+                                          id: content.id,
+                                          content: content.content,
+                                          type: content.type,
+                                          level: content.level,
+                                          isCustom: content.isCustom,
+                                          isActive: content.isActive,
+                                          isFavorite: isFav, // Pass current state
+                                          penaltyText: content.penaltyText,
+                                          points: content.points,
+                                        ));
+                                      },
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 24),
                           // Question content text

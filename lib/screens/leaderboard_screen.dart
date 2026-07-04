@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:random_avatar/random_avatar.dart';
 import 'package:provider/provider.dart';
 import '../core/theme/app_colors.dart';
 import '../providers/player_provider.dart';
+import '../services/database_helper.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
@@ -10,114 +12,169 @@ class LeaderboardScreen extends StatefulWidget {
   State<LeaderboardScreen> createState() => _LeaderboardScreenState();
 }
 
-class _LeaderboardScreenState extends State<LeaderboardScreen> {
-  int _selectedPeriod = 1; // 0: Tuần, 1: Tháng, 2: Tất cả
+class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
 
-  final List<Map<String, dynamic>> _mockMonthlyLeaderboard = [
-    {'name': 'Nam', 'score': 280, 'seed': 'Nam'},
-    {'name': 'Huy', 'score': 210, 'seed': 'Huy'},
-    {'name': 'Phương', 'score': 180, 'seed': 'Phuong'},
-    {'name': 'Khoa', 'score': 120, 'seed': 'Khoa'},
-    {'name': 'Trang', 'score': 90, 'seed': 'Trang'},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+  }
 
-  final List<Map<String, dynamic>> _mockWeeklyLeaderboard = [
-    {'name': 'Huy', 'score': 190, 'seed': 'Huy'},
-    {'name': 'An', 'score': 150, 'seed': 'An'},
-    {'name': 'Linh', 'score': 110, 'seed': 'Linh'},
-    {'name': 'Nam', 'score': 90, 'seed': 'Nam'},
-    {'name': 'Phương', 'score': 60, 'seed': 'Phuong'},
-  ];
-
-  final List<Map<String, dynamic>> _mockAllTimeLeaderboard = [
-    {'name': 'Minh', 'score': 3540, 'seed': 'Minh'},
-    {'name': 'An', 'score': 2980, 'seed': 'An'},
-    {'name': 'Linh', 'score': 2750, 'seed': 'Linh'},
-    {'name': 'Nam', 'score': 2100, 'seed': 'Nam'},
-    {'name': 'Huy', 'score': 1890, 'seed': 'Huy'},
-    {'name': 'Phương', 'score': 1520, 'seed': 'Phuong'},
-  ];
-
-  List<Map<String, dynamic>> _getLeaderboardData() {
-    switch (_selectedPeriod) {
-      case 0:
-        return _mockWeeklyLeaderboard;
-      case 1:
-        return _mockMonthlyLeaderboard;
-      default:
-        return _mockAllTimeLeaderboard;
-    }
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final playerProvider = Provider.of<PlayerProvider>(context);
-    final activePlayers = playerProvider.players;
-
-    // Default podium values for "Tháng"
-    String firstPlaceName = 'Minh';
-    int firstPlaceScore = 520;
-    String secondPlaceName = 'An';
-    int secondPlaceScore = 380;
-    String thirdPlaceName = 'Linh';
-    int thirdPlaceScore = 310;
-
-    // If we have active players, we can override or merge them
-    if (activePlayers.isNotEmpty) {
-      final sortedActive = List.from(activePlayers)..sort((a, b) => b.score.compareTo(a.score));
-      if (sortedActive.isNotEmpty) {
-        firstPlaceName = sortedActive[0].name;
-        firstPlaceScore = sortedActive[0].score;
-      }
-      if (sortedActive.length > 1) {
-        secondPlaceName = sortedActive[1].name;
-        secondPlaceScore = sortedActive[1].score;
-      }
-      if (sortedActive.length > 2) {
-        thirdPlaceName = sortedActive[2].name;
-        thirdPlaceScore = sortedActive[2].score;
-      }
-    }
-
-    final listData = _getLeaderboardData();
-
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text(
-          'Bảng xếp hạng',
+          'Bảng Xếp Hạng',
           style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: AppColors.textPrimary),
         ),
         centerTitle: true,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
         automaticallyImplyLeading: false,
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: const Color(0xFF7C5CFF),
+          unselectedLabelColor: AppColors.textSecondary,
+          indicatorColor: const Color(0xFF7C5CFF),
+          indicatorWeight: 3,
+          labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+          tabs: const [
+            Tab(text: 'Toàn Cầu'),
+            Tab(text: 'Các Nhóm'),
+            Tab(text: 'Nhóm Hiện Tại'),
+          ],
+        ),
       ),
-      body: Stack(
+      body: TabBarView(
+        controller: _tabController,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 12),
-                // Period tabs
-                Row(
-                  children: [
-                    _buildPeriodTab('Tuần', 0),
-                    const SizedBox(width: 8),
-                    _buildPeriodTab('Tháng', 1),
-                    const SizedBox(width: 8),
-                    _buildPeriodTab('Tất cả', 2),
-                  ],
-                ),
-                const SizedBox(height: 32),
-                // Podiums (Hạng 1, 2, 3)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // 2nd Place (Left)
+          _buildGlobalTab(),
+          _buildGroupsTab(),
+          _buildCurrentGroupTab(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGlobalTab() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: DatabaseHelper.instance.getGlobalLeaderboard(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final list = snapshot.data ?? [];
+        if (list.isEmpty) {
+          return _buildEmptyState('Chưa có dữ liệu người chơi.');
+        }
+        
+        final mappedList = list.map((e) => {
+          'name': e['name'] as String,
+          'score': e['total_score'] as int,
+          'avatarSeed': e['name'] as String,
+        }).toList();
+
+        return _buildLeaderboardContent(mappedList);
+      },
+    );
+  }
+
+  Widget _buildGroupsTab() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: DatabaseHelper.instance.getGroupLeaderboard(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final list = snapshot.data ?? [];
+        if (list.isEmpty) {
+          return _buildEmptyState('Chưa có dữ liệu nhóm.');
+        }
+        
+        final mappedList = list.map((e) => {
+          'name': e['name'] as String,
+          'score': e['total_score'] as int,
+          'avatarSeed': e['name'] as String,
+        }).toList();
+
+        return _buildLeaderboardContent(mappedList);
+      },
+    );
+  }
+
+  Widget _buildCurrentGroupTab() {
+    final playerProvider = Provider.of<PlayerProvider>(context);
+    final activePlayers = playerProvider.players;
+    
+    if (activePlayers.isEmpty) {
+      return _buildEmptyState('Chưa có người chơi nào trong nhóm.');
+    }
+
+    final listData = List.from(activePlayers)..sort((a, b) => b.score.compareTo(a.score));
+    final mappedList = listData.map((e) => {
+      'name': e.name as String,
+      'score': e.score as int,
+      'avatarSeed': e.name as String,
+    }).toList();
+
+    return _buildLeaderboardContent(mappedList);
+  }
+
+  Widget _buildEmptyState(String message) {
+    return Center(
+      child: Text(
+        message,
+        style: const TextStyle(color: AppColors.textSecondary, fontSize: 16),
+      ),
+    );
+  }
+
+  Widget _buildLeaderboardContent(List<Map<String, dynamic>> listData) {
+    String firstPlaceName = '';
+    int firstPlaceScore = 0;
+    String secondPlaceName = '';
+    int secondPlaceScore = 0;
+    String thirdPlaceName = '';
+    int thirdPlaceScore = 0;
+
+    if (listData.isNotEmpty) {
+      firstPlaceName = listData[0]['name'];
+      firstPlaceScore = listData[0]['score'];
+    }
+    if (listData.length > 1) {
+      secondPlaceName = listData[1]['name'];
+      secondPlaceScore = listData[1]['score'];
+    }
+    if (listData.length > 2) {
+      thirdPlaceName = listData[2]['name'];
+      thirdPlaceScore = listData[2]['score'];
+    }
+
+    final remainingPlayers = listData.length > 3 ? listData.sublist(3) : [];
+
+    return Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 24),
+              // Podiums (Hạng 1, 2, 3)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (listData.length > 1)
                     _buildPodiumColumn(
                       name: secondPlaceName,
                       score: secondPlaceScore,
@@ -125,9 +182,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                       height: 110,
                       avatarSeed: secondPlaceName,
                       color: const Color(0xFFE8EBF3),
-                    ),
-                    const SizedBox(width: 16),
-                    // 1st Place (Center)
+                    )
+                  else
+                    const SizedBox(width: 80),
+                  const SizedBox(width: 16),
+                  if (listData.isNotEmpty)
                     _buildPodiumColumn(
                       name: firstPlaceName,
                       score: firstPlaceScore,
@@ -137,8 +196,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                       color: const Color(0xFFFFF7E6),
                       hasCrown: true,
                     ),
-                    const SizedBox(width: 16),
-                    // 3rd Place (Right)
+                  const SizedBox(width: 16),
+                  if (listData.length > 2)
                     _buildPodiumColumn(
                       name: thirdPlaceName,
                       score: thirdPlaceScore,
@@ -146,161 +205,95 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                       height: 95,
                       avatarSeed: thirdPlaceName,
                       color: const Color(0xFFFFECEF),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                // Rest of Leaderboard list
-                Expanded(
-                  child: ListView.builder(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.only(bottom: 80),
-                    itemCount: listData.length,
-                    itemBuilder: (context, index) {
-                      final item = listData[index];
-                      final name = item['name'] as String;
-                      final score = item['score'] as int;
-                      final seed = item['seed'] as String;
-                      final rank = index + 4;
+                    )
+                  else
+                    const SizedBox(width: 80),
+                ],
+              ),
+              const SizedBox(height: 24),
+              // Rest of Leaderboard list
+              Expanded(
+                child: ListView.builder(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.only(bottom: 80),
+                  itemCount: remainingPlayers.length,
+                  itemBuilder: (context, index) {
+                    final item = remainingPlayers[index];
+                    final rank = index + 4;
 
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFFE8EBF3), width: 1.5),
-                        ),
-                        child: Row(
-                          children: [
-                            // Rank Number
-                            Text(
-                              '$rank',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                                color: AppColors.textSecondary,
-                              ),
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFE8EBF3), width: 1.5),
+                      ),
+                      child: Row(
+                        children: [
+                          // Rank Number
+                          Text(
+                            '$rank',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.textSecondary,
                             ),
-                            const SizedBox(width: 16),
-                            // Avatar
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: Container(
-                                width: 36,
+                          ),
+                          const SizedBox(width: 16),
+                          // Avatar
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              color: const Color(0xFFF2F4F7),
+                              child: RandomAvatar(
+                                item['avatarSeed'],
+                                trBackground: false,
                                 height: 36,
-                                color: const Color(0xFFF2F4F7),
-                                child: Image.network(
-                                  'https://api.dicebear.com/7.x/lorelei/png?seed=$seed',
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.person),
-                                ),
+                                width: 36,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            // Name
-                            Expanded(
-                              child: Text(
-                                name,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                            ),
-                            // Score
-                            Text(
-                              '$score',
+                          ),
+                          const SizedBox(width: 12),
+                          // Name
+                          Expanded(
+                            child: Text(
+                              item['name'],
                               style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
                                 color: AppColors.textPrimary,
                               ),
                             ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+                          ),
+                          // Points
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF7E6),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '${item['score']} điểm',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
-              ],
-            ),
-          ),
-          // Sticky Bottom "My Score" Bar
-          Positioned(
-            left: 24,
-            right: 24,
-            bottom: 16,
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF6F5FF),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: const Color(0xFFE5E2FF), width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
               ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        '7',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF7C5CFF)),
-                      ),
-                      SizedBox(width: 16),
-                      Text(
-                        'Điểm của bạn',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    '120',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF7C5CFF)),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPeriodTab(String title, int periodIndex) {
-    final isSelected = _selectedPeriod == periodIndex;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _selectedPeriod = periodIndex;
-          });
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF7C5CFF) : const Color(0xFFF2F4F7),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              color: isSelected ? Colors.white : AppColors.textSecondary,
-            ),
-            textAlign: TextAlign.center,
+            ],
           ),
         ),
-      ),
+      ],
     );
   }
 
@@ -317,7 +310,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          // Avatar with optional crown
+          // Avatar
           Stack(
             clipBehavior: Clip.none,
             alignment: Alignment.center,
@@ -340,10 +333,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   ],
                 ),
                 child: ClipOval(
-                  child: Image.network(
-                    'https://api.dicebear.com/7.x/lorelei/png?seed=$avatarSeed',
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.person),
+                  child: RandomAvatar(
+                    avatarSeed,
+                    trBackground: false,
+                    height: 64,
+                    width: 64,
                   ),
                 ),
               ),
@@ -351,7 +345,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 const Positioned(
                   top: -24,
                   child: Icon(
-                    Icons.emoji_events_rounded, // trophy as a crown
+                    Icons.emoji_events_rounded,
                     color: Color(0xFFFFB300),
                     size: 26,
                   ),
@@ -359,56 +353,59 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               Positioned(
                 bottom: -8,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  width: 24,
+                  height: 24,
                   decoration: BoxDecoration(
-                    color: rank == 1 ? const Color(0xFFFFB300) : AppColors.textSecondary,
-                    borderRadius: BorderRadius.circular(10),
+                    color: rank == 1 ? const Color(0xFFFFB300) : (rank == 2 ? const Color(0xFF9E9E9E) : const Color(0xFFBCAAA4)),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
                   ),
-                  child: Text(
-                    '$rank',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white,
+                  child: Center(
+                    child: Text(
+                      '$rank',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 18),
-          // Podium pedestal
+          const SizedBox(height: 16),
+          // Name
+          Text(
+            name,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          // Score
+          Text(
+            '$score pts',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Podium Block
           Container(
             height: height,
-            width: double.infinity,
             decoration: BoxDecoration(
               color: color,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.textPrimary,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '$score',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                    color: rank == 1 ? const Color(0xFFC69100) : AppColors.textSecondary,
-                  ),
-                ),
-              ],
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
             ),
           ),
         ],

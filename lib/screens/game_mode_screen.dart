@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../core/app_notification.dart';
+import 'package:provider/provider.dart';
+import '../providers/group_provider.dart';
+import '../providers/truth_or_dare_provider.dart';
+import '../models/game_session.dart';
+import '../services/database_helper.dart';
 import 'truth_or_dare/random_player_screen.dart';
 
 class GameModeScreen extends StatelessWidget {
@@ -34,7 +39,15 @@ class GameModeScreen extends StatelessWidget {
                 subtitle: 'Trả lời thật lòng\nhoặc làm thử thách',
                 gradient: AppColors.truthGradient, // Sử dụng màu xanh tương tự thiết kế
                 imagePath: null, // Placeholder for illustration
-                onTap: () {
+                onTap: () async {
+                  final groupProvider = Provider.of<GroupProvider>(context, listen: false);
+                  final tdProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
+                  if (groupProvider.currentGroup != null) {
+                    final session = GameSession(groupId: groupProvider.currentGroup!.id!, gameMode: 'truth_or_dare');
+                    final sessionId = await DatabaseHelper.instance.createGameSession(session);
+                    tdProvider.currentSessionId = sessionId;
+                  }
+                  if (!context.mounted) return;
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(builder: (_) => const RandomPlayerScreen()),

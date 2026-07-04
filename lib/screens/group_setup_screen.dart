@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'dart:math';
 import 'package:provider/provider.dart';
+import 'package:random_avatar/random_avatar.dart';
 import '../core/theme/app_colors.dart';
 import '../core/app_notification.dart';
 import '../providers/group_provider.dart';
 import '../providers/player_provider.dart';
-import 'game_mode_screen.dart';
+import '../models/game_session.dart';
+import '../services/database_helper.dart';
+import 'truth_or_dare/random_player_screen.dart';
+import '../providers/truth_or_dare_provider.dart';
 
 class GroupSetupScreen extends StatefulWidget {
   const GroupSetupScreen({super.key});
@@ -15,6 +20,17 @@ class GroupSetupScreen extends StatefulWidget {
 
 class _GroupSetupScreenState extends State<GroupSetupScreen> {
   final _playerNameController = TextEditingController();
+  final _groupNameController = TextEditingController();
+  
+  final List<String> _funnyNames = [
+    "Biệt đội quậy phá",
+    "Hội ế",
+    "Binh đoàn tấu hài",
+    "Những kẻ sống ảo",
+    "Hội sợ vợ",
+    "Ăn tàn phá hại",
+    "Đội siêu lầy"
+  ];
 
   @override
   void initState() {
@@ -27,20 +43,26 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
   Future<void> _checkAndInitGroup() async {
     final groupProvider = Provider.of<GroupProvider>(context, listen: false);
     if (groupProvider.currentGroup == null) {
-      // Auto create a default party group to skip the group naming step,
-      // bringing the user directly to the player setup as shown in the mockup.
-      await groupProvider.createGroup("Spinix Party");
-    }
-    
-    if (mounted && groupProvider.currentGroup != null) {
-      Provider.of<PlayerProvider>(context, listen: false)
-          .loadPlayersForGroup(groupProvider.currentGroup!.id!);
+      final randomName = _funnyNames[Random().nextInt(_funnyNames.length)];
+      await groupProvider.createGroup(randomName);
+      if (mounted && groupProvider.currentGroup != null) {
+        _groupNameController.text = groupProvider.currentGroup!.name;
+        Provider.of<PlayerProvider>(context, listen: false)
+            .loadPlayersForGroup(groupProvider.currentGroup!.id!);
+      }
+    } else {
+      if (mounted) {
+        _groupNameController.text = groupProvider.currentGroup!.name;
+        Provider.of<PlayerProvider>(context, listen: false)
+            .loadPlayersForGroup(groupProvider.currentGroup!.id!);
+      }
     }
   }
 
   @override
   void dispose() {
     _playerNameController.dispose();
+    _groupNameController.dispose();
     super.dispose();
   }
 
@@ -156,17 +178,28 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
     AppNotification.success(context, 'Đã thêm $name vào nhóm! 🎉');
   }
 
-  void _startGame() {
+  void _startGame() async {
     final players = Provider.of<PlayerProvider>(context, listen: false).players;
     if (players.length < 2) {
       AppNotification.warning(context, 'Cần ít nhất 2 người chơi để bắt đầu!');
       return;
     }
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const GameModeScreen()),
-    );
+    final groupProvider = Provider.of<GroupProvider>(context, listen: false);
+    final tdProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
+    
+    if (groupProvider.currentGroup != null) {
+      final session = GameSession(groupId: groupProvider.currentGroup!.id!, gameMode: 'truth_or_dare');
+      final sessionId = await DatabaseHelper.instance.createGameSession(session);
+      tdProvider.currentSessionId = sessionId;
+    }
+
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const RandomPlayerScreen()),
+      );
+    }
   }
 
   // Get a colored border for avatar decoration
@@ -215,12 +248,6 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline_rounded, size: 26, color: AppColors.textPrimary),
-            onPressed: _showAddPlayerBottomSheet,
-          ),
-        ],
         centerTitle: true,
       ),
       body: groupProvider.currentGroup == null
@@ -230,6 +257,36 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // Group Name Editor
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE8EBF3), width: 1.5),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: TextField(
+                      controller: _groupNameController,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                      ),
+                      decoration: InputDecoration(
+                        border: InputBorder.none,
+                        hintText: 'Tên nhóm...',
+                        hintStyle: TextStyle(color: AppColors.textSecondary.withOpacity(0.5)),
+                        icon: const Icon(Icons.edit_rounded, color: Color(0xFF7C5CFF), size: 20),
+                      ),
+                      onChanged: (val) {
+                        if (val.trim().isNotEmpty && groupProvider.currentGroup != null) {
+                          groupProvider.updateGroupName(groupProvider.currentGroup!.id!, val.trim());
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  
                   Expanded(
                     child: GridView.builder(
                       physics: const BouncingScrollPhysics(),
@@ -299,26 +356,11 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
                                     ),
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(100),
-                                      child: Image.network(
-                                        'https://api.dicebear.com/7.x/lorelei/png?seed=${player.name}',
-                                        fit: BoxFit.cover,
-                                        loadingBuilder: (context, child, progress) {
-                                          if (progress == null) return child;
-                                          return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-                                        },
-                                        errorBuilder: (context, error, stackTrace) {
-                                          return CircleAvatar(
-                                            backgroundColor: borderColor.withOpacity(0.2),
-                                            child: Text(
-                                              player.name.isNotEmpty ? player.name[0].toUpperCase() : '',
-                                              style: TextStyle(
-                                                fontSize: 24,
-                                                fontWeight: FontWeight.w900,
-                                                color: borderColor,
-                                              ),
-                                            ),
-                                          );
-                                        },
+                                      child: RandomAvatar(
+                                        player.name, 
+                                        trBackground: false, 
+                                        height: 48, 
+                                        width: 48
                                       ),
                                     ),
                                   ),

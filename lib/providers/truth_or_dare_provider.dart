@@ -2,103 +2,180 @@ import 'package:flutter/foundation.dart';
 import 'dart:math';
 import '../models/player.dart';
 import '../models/game_content.dart';
+import '../services/database_helper.dart';
 
 class TruthOrDareProvider with ChangeNotifier {
-  Player? _currentPlayer;
-  GameContent? _currentContent;
-  String _state = 'selecting_player'; // selecting_player, choosing_type, playing, result
-
-  Player? get currentPlayer => _currentPlayer;
-  GameContent? get currentContent => _currentContent;
+  // ─── State machine ───────────────────────────────────────────────────────
+  // States: 'selecting_player' | 'choosing_type' | 'playing' | 'result'
+  String _state = 'selecting_player';
   String get state => _state;
 
-  final Random _random = Random();
-  int? _lastPlayerId;
+  // ─── Current turn data ────────────────────────────────────────────────────
+  Player? _currentPlayer;
+  GameContent? _currentContent;
+  Player? get currentPlayer => _currentPlayer;
+  GameContent? get currentContent => _currentContent;
 
-  // Game configuration
+  // ─── Session ─────────────────────────────────────────────────────────────
+  int? currentSessionId;
+  List<String> currentCategories = ['Tổng hợp'];
+  String? currentDifficulty;
+
+  // ─── Game configuration ───────────────────────────────────────────────────
   int totalRounds = 5;
   int currentRound = 1;
   int timeLimit = 30; // seconds
   int rewardPoints = 20;
   int penaltyPoints = -10;
 
-  // Round stats
+  // ─── Round tracking ───────────────────────────────────────────────────────
+  // IDs of players who have already played in the CURRENT round
+  final Set<int> _playedThisRound = {};
+
+  // Round-level stats (reset each round)
   int correctCount = 0;
   int skipCount = 0;
-  int pointsGained = 0;
-  int turnInRound = 0;
+  int pointsGainedThisRound = 0; // net points awarded this round
 
+  // Expose counts for UI
+  int get playedThisRound => _playedThisRound.length;
+  // Backwards-compat alias used in old code
+  int get pointsGained => pointsGainedThisRound;
+  int get turnInRound => _playedThisRound.length;
+
+  final Random _random = Random();
+
+  // ─── Reset ────────────────────────────────────────────────────────────────
   void reset() {
+    _state = 'selecting_player';
     _currentPlayer = null;
     _currentContent = null;
-    _state = 'selecting_player';
-    _lastPlayerId = null;
+    currentSessionId = null;
     currentRound = 1;
-    turnInRound = 0;
+    currentCategories = ['Tổng hợp'];
+    currentDifficulty = null;
+    _playedThisRound.clear();
     correctCount = 0;
     skipCount = 0;
-    pointsGained = 0;
+    pointsGainedThisRound = 0;
     notifyListeners();
   }
 
+  // ─── Configure ────────────────────────────────────────────────────────────
   void configureGame({
     required int rounds,
     required int time,
     required int reward,
     required int penalty,
+    List<String>? categories,
+    String? difficulty,
   }) {
     totalRounds = rounds;
     timeLimit = time;
     rewardPoints = reward;
     penaltyPoints = penalty;
+    currentDifficulty = difficulty;
+    if (categories != null && categories.isNotEmpty) {
+      currentCategories = categories;
+    }
     notifyListeners();
   }
 
-  void selectRandomPlayer(List<Player> players) {
-    if (players.isEmpty) return;
-    
-    List<Player> availablePlayers = List.from(players);
-    if (players.length >= 3 && _lastPlayerId != null) {
-      availablePlayers.removeWhere((p) => p.id == _lastPlayerId);
+  // ─── Select a player who hasn't played this round yet ────────────────────
+  // Returns true if a player was selected, false if round is already complete.
+  bool selectRandomPlayer(List<Player> players) {
+    if (players.isEmpty) return false;
+
+    // Filter: only players who have NOT played this round
+    final available = players
+        .where((p) => p.id != null && !_playedThisRound.contains(p.id))
+        .toList();
+
+    if (available.isEmpty) {
+      // Everyone played → the round should have ended already.
+      // Safety: treat as round complete.
+      return false;
     }
 
-    _currentPlayer = availablePlayers[_random.nextInt(availablePlayers.length)];
-    _lastPlayerId = _currentPlayer?.id;
+    _currentPlayer = available[_random.nextInt(available.length)];
     _state = 'choosing_type';
     notifyListeners();
+    return true;
   }
 
+  // ─── Choose content ───────────────────────────────────────────────────────
   void chooseType(GameContent content) {
     _currentContent = content;
     _state = 'playing';
     notifyListeners();
   }
 
+  // ─── Record outcome ───────────────────────────────────────────────────────
   void recordAnswer(int points) {
+    if (_currentPlayer?.id != null) {
+      _playedThisRound.add(_currentPlayer!.id!);
+    }
+    
+    if (currentSessionId != null && _currentPlayer != null && _currentContent != null) {
+      DatabaseHelper.instance.insertSessionTurn(
+        currentSessionId!,
+        currentRound,
+        _currentPlayer!.name,
+        _currentContent!.content,
+        points,
+      );
+    }
+
     correctCount++;
-    pointsGained += points;
-    turnInRound++;
+    pointsGainedThisRound += points;
+    _currentContent = null;
     notifyListeners();
   }
 
   void recordSkip(int points) {
+    if (_currentPlayer?.id != null) {
+      _playedThisRound.add(_currentPlayer!.id!);
+    }
+    
+    if (currentSessionId != null && _currentPlayer != null && _currentContent != null) {
+      DatabaseHelper.instance.insertSessionTurn(
+        currentSessionId!,
+        currentRound,
+        _currentPlayer!.name,
+        _currentContent!.content,
+        points, // negative value
+      );
+    }
+
     skipCount++;
-    pointsGained += points;
-    turnInRound++;
+    pointsGainedThisRound += points; // points is negative for penalty
+    _currentContent = null;
     notifyListeners();
   }
 
+  // ─── Round complete check ─────────────────────────────────────────────────
+  bool isRoundComplete(int totalPlayers) {
+    return totalPlayers > 0 && _playedThisRound.length >= totalPlayers;
+  }
+
+  bool get isGameOver => currentRound >= totalRounds;
+
+  // ─── Advance to next round ────────────────────────────────────────────────
   void nextRound() {
     currentRound++;
-    turnInRound = 0;
+    _playedThisRound.clear();
     correctCount = 0;
     skipCount = 0;
-    pointsGained = 0;
+    pointsGainedThisRound = 0;
+    _currentPlayer = null;
+    _currentContent = null;
+    _state = 'selecting_player';
     notifyListeners();
   }
 
-  void completeTurn() {
-    _state = 'result';
+  // ─── Advance to next round / turn ─────────────────────────────────────────
+  void completeTurn(bool roundComplete) {
+    _state = roundComplete ? 'result' : 'selecting_player';
     notifyListeners();
   }
 

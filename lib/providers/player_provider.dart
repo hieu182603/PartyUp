@@ -12,9 +12,15 @@ class PlayerProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  void clearPlayers() {
+    _players.clear();
+    notifyListeners();
+  }
+
   Future<void> addPlayer(int groupId, String name, {String? avatar}) async {
     final player = Player(groupId: groupId, name: name, avatar: avatar);
     final id = await DatabaseHelper.instance.createPlayer(player);
+    await DatabaseHelper.instance.createGlobalPlayer(name);
     _players.add(player.copyWith(id: id));
     notifyListeners();
   }
@@ -30,6 +36,7 @@ class PlayerProvider with ChangeNotifier {
     if (index != -1) {
       _players[index].score += points;
       await DatabaseHelper.instance.updatePlayer(_players[index]);
+      await DatabaseHelper.instance.addPointsToGlobalPlayer(_players[index].name, points, 0);
       notifyListeners();
     }
   }
@@ -39,6 +46,7 @@ class PlayerProvider with ChangeNotifier {
     if (index != -1) {
       _players[index].penalty += penaltyPoints;
       await DatabaseHelper.instance.updatePlayer(_players[index]);
+      await DatabaseHelper.instance.addPointsToGlobalPlayer(_players[index].name, 0, penaltyPoints);
       notifyListeners();
     }
   }

@@ -8,63 +8,60 @@ import '../providers/group_provider.dart';
 import 'group_setup_screen.dart';
 
 class GameCustomizationScreen extends StatefulWidget {
-  final String categoryName;
+  final List<String> categories;
 
-  const GameCustomizationScreen({super.key, required this.categoryName});
+  const GameCustomizationScreen({super.key, required this.categories});
 
   @override
   State<GameCustomizationScreen> createState() => _GameCustomizationScreenState();
 }
 
 class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
-  int _playerCount = 6;
-  bool _useMockPlayers = false;
   int _timeLimitIndex = 1; // 0: 15s, 1: 20s, 2: 30s, 3: 45s
   int _rewardPointsIndex = 1; // 0: +10, 1: +20, 2: +30
   int _penaltyPointsIndex = 1; // 0: -5, 1: -10, 2: -15
   int _roundsIndex = 1; // 0: 3 vòng, 1: 5 vòng, 2: 7 vòng, 3: 10 vòng
+  int _difficultyIndex = 0; // 0: Tất cả, 1: Dễ, 2: Vừa, 3: Khó, 4: Kịch tính
 
   final List<int> _timeLimits = [15, 20, 30, 45];
   final List<int> _rewardPoints = [10, 20, 30];
   final List<int> _penaltyPoints = [-15, -10, -5];
   final List<int> _rounds = [3, 5, 7, 10];
+  final List<String> _difficultyLabels = ['Tất cả', 'Nhẹ nhàng', 'Vui vẻ', 'Thử thách', 'Kịch tính'];
+  final List<String?> _difficultyValues = [null, 'easy', 'medium', 'hard', 'extreme'];
 
   void _onStart() async {
-    final todProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
-    final groupProvider = Provider.of<GroupProvider>(context, listen: false);
-    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    try {
+      final todProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
+      final groupProvider = Provider.of<GroupProvider>(context, listen: false);
+      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
 
-    // Save configuration in provider
-    todProvider.configureGame(
-      rounds: _rounds[_roundsIndex],
-      time: _timeLimits[_timeLimitIndex],
-      reward: _rewardPoints[_rewardPointsIndex],
-      penalty: _penaltyPoints[_penaltyPointsIndex],
-    );
-
-    // Initialize group if not present
-    if (groupProvider.currentGroup == null) {
-      await groupProvider.createGroup("Spinix Party");
-    }
-    final activeGroupId = groupProvider.currentGroup?.id;
-
-    if (activeGroupId != null && _useMockPlayers) {
-      // Pre-fill mock players to match configured number of players
-      final existingPlayers = playerProvider.players;
-      if (existingPlayers.length < _playerCount) {
-        final mockNames = ['Minh', 'An', 'Linh', 'Nam', 'Huy', 'Phương', 'Khoa', 'Trang'];
-        for (int i = existingPlayers.length; i < _playerCount; i++) {
-          final name = mockNames[i % mockNames.length] + (i >= mockNames.length ? ' ${i ~/ mockNames.length + 1}' : '');
-          await playerProvider.addPlayer(activeGroupId, name);
-        }
-      }
-    }
-
-    if (mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const GroupSetupScreen()),
+      // Save configuration in provider
+      todProvider.configureGame(
+        rounds: _rounds[_roundsIndex],
+        time: _timeLimits[_timeLimitIndex],
+        reward: _rewardPoints[_rewardPointsIndex],
+        penalty: _penaltyPoints[_penaltyPointsIndex],
+        categories: widget.categories,
+        difficulty: _difficultyValues[_difficultyIndex],
       );
+
+      // Initialize group if not present
+      if (groupProvider.currentGroup == null) {
+        await groupProvider.createGroup("Spinix Party");
+        playerProvider.clearPlayers();
+      }
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const GroupSetupScreen()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        AppNotification.error(context, 'Lỗi: $e');
+      }
     }
   }
 
@@ -109,68 +106,6 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // Toggle to use mock players
-                  _buildCustomRow(
-                    icon: Icons.person_add_alt_1_rounded,
-                    iconColor: const Color(0xFF3DD99F),
-                    title: 'Người chơi mẫu',
-                    trailing: Switch(
-                      value: _useMockPlayers,
-                      activeColor: const Color(0xFF7C5CFF),
-                      onChanged: (value) {
-                        setState(() {
-                          _useMockPlayers = value;
-                        });
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // Player count setting card (only visible if useMockPlayers is true)
-                  if (_useMockPlayers) ...[
-                    _buildCustomRow(
-                      icon: Icons.people_rounded,
-                      iconColor: const Color(0xFF7C5CFF),
-                      title: 'Số người chơi mẫu',
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            onPressed: () {
-                              if (_playerCount > 2) {
-                                setState(() {
-                                  _playerCount--;
-                                });
-                              } else {
-                                AppNotification.warning(context, 'Cần ít nhất 2 người chơi!');
-                              }
-                            },
-                            icon: const Icon(Icons.remove_circle_outline_rounded, color: AppColors.textSecondary),
-                          ),
-                          Text(
-                            '$_playerCount',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () {
-                              if (_playerCount < 12) {
-                                setState(() {
-                                  _playerCount++;
-                                });
-                              } else {
-                                AppNotification.warning(context, 'Tối đa 12 người chơi!');
-                              }
-                            },
-                            icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.textSecondary),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
                   _buildCustomRow(
                     icon: Icons.access_time_filled_rounded,
                     iconColor: const Color(0xFFFF5B7F),
@@ -338,6 +273,50 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                               });
                             } else {
                               AppNotification.warning(context, 'Số vòng chơi tối đa là ${_rounds.last}!');
+                            }
+                          },
+                          icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Difficulty setting
+                  _buildCustomRow(
+                    icon: Icons.local_fire_department_rounded,
+                    iconColor: const Color(0xFFFF9B3D),
+                    title: 'Mức độ',
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          onPressed: () {
+                            if (_difficultyIndex > 0) {
+                              setState(() {
+                                _difficultyIndex--;
+                              });
+                            } else {
+                              AppNotification.warning(context, 'Mức độ thấp nhất là ${_difficultyLabels.first}!');
+                            }
+                          },
+                          icon: const Icon(Icons.remove_circle_outline_rounded, color: AppColors.textSecondary),
+                        ),
+                        Text(
+                          _difficultyLabels[_difficultyIndex],
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () {
+                            if (_difficultyIndex < _difficultyLabels.length - 1) {
+                              setState(() {
+                                _difficultyIndex++;
+                              });
+                            } else {
+                              AppNotification.warning(context, 'Mức độ cao nhất là ${_difficultyLabels.last}!');
                             }
                           },
                           icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.textSecondary),

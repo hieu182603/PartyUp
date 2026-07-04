@@ -42,6 +42,8 @@ dependencies:
   path: ^1.9.1
   sqflite_common_ffi_web: ^1.1.1
   audioplayers: ^6.0.0
+  random_avatar: ^0.0.8
+  intl: ^0.20.3
 
 dev_dependencies:
   flutter_test:
@@ -69,6 +71,7 @@ flutter:
   assets:
     - assets/images/
     - assets/audio/
+    - assets/data/game_data.json
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
