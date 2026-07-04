@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
+import '../core/app_notification.dart';
 import 'truth_or_dare/random_player_screen.dart';
 
 class GameModeScreen extends StatelessWidget {
@@ -50,9 +51,7 @@ class GameModeScreen extends StatelessWidget {
                 gradient: AppColors.primaryGradient,
                 imagePath: null, // Placeholder for illustration
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Chế độ Luật bí mật đã bị vô hiệu hóa!')),
-                  );
+                  AppNotification.info(context, 'Chế độ Luật bí mật sớm ra mắt! 🤫');
                 },
               ),
             ),
