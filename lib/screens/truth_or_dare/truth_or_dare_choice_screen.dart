@@ -11,14 +11,18 @@ import 'random_player_screen.dart';
 class TruthOrDareChoiceScreen extends StatelessWidget {
   const TruthOrDareChoiceScreen({super.key});
 
-  void _onChoice(BuildContext context, String type) {
+  void _onChoice(BuildContext context, String type) async {
     // Play selection SFX
     AudioService.instance.playSFX('tap.mp3');
 
     final contentProvider = Provider.of<GameContentProvider>(context, listen: false);
     final todProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
 
-    final content = contentProvider.getRandomContent(type);
+    final categories = todProvider.currentCategories;
+    final difficulty = todProvider.currentDifficulty;
+    final content = await contentProvider.getRandomContent(type, categories: categories, difficulty: difficulty);
+    if (!context.mounted) return;
+
     if (content != null) {
       todProvider.chooseType(content);
       Navigator.pushReplacement(

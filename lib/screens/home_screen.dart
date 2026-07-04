@@ -1,10 +1,20 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../core/app_notification.dart';
+import 'package:random_avatar/random_avatar.dart';
+import 'package:provider/provider.dart';
+import '../providers/group_provider.dart';
+import '../providers/player_provider.dart';
+import '../providers/truth_or_dare_provider.dart';
+import '../services/database_helper.dart';
 import 'categories_screen.dart';
 import 'history_screen.dart';
 import 'leaderboard_screen.dart';
 import 'settings_screen.dart';
+import 'truth_or_dare/random_player_screen.dart';
+import 'truth_or_dare/truth_or_dare_choice_screen.dart';
+import 'truth_or_dare/content_playing_screen.dart';
+import 'truth_or_dare/result_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,6 +25,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentTabIndex = 0;
+  bool _isLoadingContinue = false;
 
   void _onGameCardTap(BuildContext context, String modeName) {
     if (modeName == 'truth_or_dare') {
@@ -100,20 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(24),
-                        child: Image.network(
-                          'https://api.dicebear.com/7.x/lorelei/png?seed=Minh',
-                          fit: BoxFit.cover,
-                          loadingBuilder: (context, child, progress) {
-                            if (progress == null) return child;
-                            return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return const CircleAvatar(
-                              backgroundColor: AppColors.warning,
-                              child: Icon(Icons.person, color: Colors.white),
-                            );
-                          },
-                        ),
+                        child: RandomAvatar('Minh', trBackground: false, height: 48, width: 48),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -222,16 +220,66 @@ class _HomeScreenState extends State<HomeScreen> {
                     onTap: () => _onGameCardTap(context, 'mini_games'),
                   ),
                   const SizedBox(height: 24),
-                  // Continue Game Card
-                  _buildContinueCard(
-                    context,
-                    title: 'Tiếp tục trò chơi',
-                    subtitle: 'Bạn đang chơi dở một trò chơi',
-                    onTap: () {
-                      AppNotification.info(context, 'Chưa có trò chơi đang dở. Hãy bắt đầu một trò mới! 🎮');
+                  // Continue Game Card - only show when there is an ongoing game
+                  Consumer<TruthOrDareProvider>(
+                    builder: (context, todProvider, _) {
+                      if (todProvider.currentSessionId == null) return const SizedBox.shrink();
+                      final roundInfo = 'Vòng ${todProvider.currentRound}/${todProvider.totalRounds} • Truth or Dare';
+                      return Column(
+                        children: [
+                          _buildContinueCard(
+                            context,
+                            title: 'Tiếp tục trò chơi',
+                            subtitle: roundInfo,
+                            isLoading: _isLoadingContinue,
+                            onTap: _isLoadingContinue ? null : () async {
+                              setState(() => _isLoadingContinue = true);
+                              try {
+                                final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+                                final groupProvider = Provider.of<GroupProvider>(context, listen: false);
+
+                                // If players list is empty, reload from DB
+                                if (playerProvider.players.isEmpty) {
+                                final groupId = groupProvider.currentGroup?.id;
+                                if (groupId != null) {
+                                  // Group is already set — just reload players
+                                  await playerProvider.loadPlayersForGroup(groupId);
+                                } else {
+                                  // No group set — find the group for this session
+                                  final groups = await DatabaseHelper.instance.getGroups();
+                                  if (groups.isNotEmpty && context.mounted) {
+                                    groupProvider.setCurrentGroup(groups.first);
+                                    await playerProvider.loadPlayersForGroup(groups.first.id!);
+                                  }
+                                }
+                              }
+
+                              if (!context.mounted) return;
+
+                              // Navigate based on current game state
+                              final state = todProvider.state;
+                              if (state == 'choosing_type') {
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => const TruthOrDareChoiceScreen()));
+                              } else if (state == 'playing') {
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => const ContentPlayingScreen()));
+                              } else if (state == 'result') {
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => const ResultScreen()));
+                              } else {
+                                // selecting_player — go to random player screen
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => const RandomPlayerScreen()));
+                              }
+                              } finally {
+                                if (mounted) {
+                                  setState(() => _isLoadingContinue = false);
+                                }
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 24),
+                        ],
+                      );
                     },
                   ),
-                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -332,7 +380,8 @@ class _HomeScreenState extends State<HomeScreen> {
     BuildContext context, {
     required String title,
     required String subtitle,
-    required VoidCallback onTap,
+    bool isLoading = false,
+    VoidCallback? onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -351,7 +400,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: Color(0xFFF0F4FD),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.restore, color: Color(0xFF7C5CFF), size: 24),
+              child: isLoading
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF7C5CFF)),
+                      ),
+                    )
+                  : const Icon(Icons.restore, color: Color(0xFF7C5CFF), size: 24),
             ),
             const SizedBox(width: 16),
             Expanded(

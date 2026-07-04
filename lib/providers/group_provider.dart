@@ -25,6 +25,19 @@ class GroupProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateGroupName(int id, String newName) async {
+    final index = _groups.indexWhere((g) => g.id == id);
+    if (index != -1) {
+      final updatedGroup = PlayerGroup(id: id, name: newName, createdAt: _groups[index].createdAt);
+      _groups[index] = updatedGroup;
+      if (_currentGroup?.id == id) {
+        _currentGroup = updatedGroup;
+      }
+      await DatabaseHelper.instance.updateGroup(updatedGroup);
+      notifyListeners();
+    }
+  }
+
   void setCurrentGroup(PlayerGroup group) {
     _currentGroup = group;
     notifyListeners();

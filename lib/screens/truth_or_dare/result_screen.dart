@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:random_avatar/random_avatar.dart';
 import 'dart:math' as math;
 import '../../providers/player_provider.dart';
 import '../../providers/truth_or_dare_provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../services/database_helper.dart';
 import 'random_player_screen.dart';
 import 'game_leaderboard_screen.dart';
 import '../home_screen.dart';
@@ -18,225 +20,243 @@ class ResultScreen extends StatelessWidget {
 
     final round = todProvider.currentRound;
     final totalRounds = todProvider.totalRounds;
-    final isGameOver = round >= totalRounds;
+    final isGameOver = todProvider.isGameOver;
 
-    // Correct/skips in this round
     final correct = todProvider.correctCount;
     final skip = todProvider.skipCount;
-    final points = todProvider.pointsGained;
+    final pointsThisRound = todProvider.pointsGainedThisRound;
 
-    // Get current main player score
-    final currentPlayerObj = playerProvider.players.firstWhere(
-      (p) => p.id == todProvider.currentPlayer?.id,
-      orElse: () => todProvider.currentPlayer ?? playerProvider.players.first,
-    );
-    final totalScore = currentPlayerObj.score;
+    // Sort players by score descending for display
+    final players = List.from(playerProvider.players)
+      ..sort((a, b) => b.score.compareTo(a.score));
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          // Background confetti
-          const Positioned.fill(
-            child: ResultConfettiWidget(),
-          ),
+          const Positioned.fill(child: ResultConfettiWidget()),
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Spacer(flex: 2),
-                  // Title: Round X Finished!
+                  const SizedBox(height: 8),
+
+                  // Title
                   Text(
-                    'Vòng $round kết thúc!',
+                    isGameOver ? '🏆 Trò chơi kết thúc!' : '🎉 Vòng $round kết thúc!',
                     style: const TextStyle(
-                      fontSize: 28,
+                      fontSize: 26,
                       fontWeight: FontWeight.w900,
                       color: AppColors.textPrimary,
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const Spacer(flex: 1),
-                  // Trophy Custom Painter
-                  Center(
-                    child: SizedBox(
-                      width: 140,
-                      height: 140,
-                      child: CustomPaint(
-                        painter: GoldenTrophyPainter(),
-                      ),
+                  const SizedBox(height: 4),
+                  Text(
+                    isGameOver
+                        ? 'Cùng xem kết quả cuối cùng!'
+                        : 'Còn ${totalRounds - round} vòng nữa',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
                     ),
+                    textAlign: TextAlign.center,
                   ),
-                  const Spacer(flex: 2),
-                  // Result Card
+
+                  const SizedBox(height: 20),
+
+                  // Round stats row
                   Container(
-                    padding: const EdgeInsets.all(28.0),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 16),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(32),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 15,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                      border: Border.all(color: const Color(0xFFE8EBF3), width: 1.5),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                          color: const Color(0xFFE8EBF3), width: 1.5),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                    child: Row(
                       children: [
-                        // Card title
-                        Text(
-                          'Kết quả vòng $round',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textSecondary,
-                          ),
-                          textAlign: TextAlign.center,
+                        _statChip(
+                          icon: Icons.check_rounded,
+                          iconColor: const Color(0xFF3DD99F),
+                          bgColor: const Color(0xFFE8F9F3),
+                          label: 'Đúng',
+                          value: '$correct lần',
                         ),
-                        const SizedBox(height: 24),
-                        // Correct & Skips counts
-                        Row(
-                          children: [
-                            // Correct
-                            Expanded(
-                              child: Column(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFFE8F9F3),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(Icons.check_rounded, color: Color(0xFF3DD99F), size: 20),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  const Text(
-                                    'Trả lời đúng',
-                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '$correct',
-                                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF3DD99F)),
-                                  ),
-                                  const Text(
-                                    'lần',
-                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            // Vertical Divider
-                            Container(
-                              width: 1.5,
-                              height: 80,
-                              color: const Color(0xFFE8EBF3),
-                            ),
-                            // Skip
-                            Expanded(
-                              child: Column(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFFFFECEF),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(Icons.close_rounded, color: Color(0xFFFF4B72), size: 20),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  const Text(
-                                    'Bỏ qua',
-                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '$skip',
-                                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFFFF4B72)),
-                                  ),
-                                  const Text(
-                                    'lần',
-                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                        const SizedBox(width: 12),
+                        _statChip(
+                          icon: Icons.close_rounded,
+                          iconColor: const Color(0xFFFF4B72),
+                          bgColor: const Color(0xFFFFECEF),
+                          label: 'Bỏ qua',
+                          value: '$skip lần',
                         ),
-                        const SizedBox(height: 28),
-                        // Current points
-                        const Text(
-                          'Điểm của bạn',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textPrimary,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.star_rounded, color: AppColors.warning, size: 28),
-                            const SizedBox(width: 6),
-                            Text(
-                              '$totalScore',
-                              style: const TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF7C5CFF),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          points >= 0 ? '+$points điểm' : '$points điểm',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: points >= 0 ? const Color(0xFF3DD99F) : const Color(0xFFFF4B72),
-                          ),
-                          textAlign: TextAlign.center,
+                        const SizedBox(width: 12),
+                        _statChip(
+                          icon: Icons.star_rounded,
+                          iconColor: AppColors.warning,
+                          bgColor: const Color(0xFFFEF7E6),
+                          label: 'Vòng này',
+                          value: pointsThisRound >= 0
+                              ? '+$pointsThisRound đ'
+                              : '$pointsThisRound đ',
+                          valueColor: pointsThisRound >= 0
+                              ? const Color(0xFF3DD99F)
+                              : const Color(0xFFFF4B72),
                         ),
                       ],
                     ),
                   ),
-                  const Spacer(flex: 3),
+
+                  const SizedBox(height: 20),
+
+                  // Scoreboard
+                  const Text(
+                    'Bảng điểm',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  Expanded(
+                    child: ListView.builder(
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: players.length,
+                      itemBuilder: (context, index) {
+                        final p = players[index];
+                        final isFirst = index == 0;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: isFirst
+                                ? const Color(0xFFFFF7E6)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: isFirst
+                                  ? const Color(0xFFFFD54F)
+                                  : const Color(0xFFE8EBF3),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              // Rank
+                              SizedBox(
+                                width: 28,
+                                child: Text(
+                                  index == 0
+                                      ? '🥇'
+                                      : index == 1
+                                          ? '🥈'
+                                          : index == 2
+                                              ? '🥉'
+                                              : '${index + 1}',
+                                  style: TextStyle(
+                                    fontSize: index < 3 ? 20 : 15,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              // Avatar
+                              ClipOval(
+                                child: RandomAvatar(
+                                  p.name,
+                                  trBackground: false,
+                                  height: 36,
+                                  width: 36,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              // Name
+                              Expanded(
+                                child: Text(
+                                  p.name,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    color: isFirst
+                                        ? const Color(0xFFC69100)
+                                        : AppColors.textPrimary,
+                                  ),
+                                ),
+                              ),
+                              // Score
+                              Row(
+                                children: [
+                                  const Icon(Icons.star_rounded,
+                                      color: AppColors.warning, size: 16),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${p.score}',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF7C5CFF),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
                   // Next action button
                   ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       if (isGameOver) {
-                        // Navigate to GameLeaderboardScreen instead of simple dialog
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (_) => const GameLeaderboardScreen()),
-                        );
+                        if (todProvider.currentSessionId != null) {
+                          await DatabaseHelper.instance.endSession(
+                            todProvider.currentSessionId!,
+                            playerProvider.players,
+                          );
+                        }
+                        if (context.mounted) {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const GameLeaderboardScreen()),
+                          );
+                        }
                       } else {
-                        // Next round
                         todProvider.nextRound();
                         Navigator.pushReplacement(
                           context,
-                          MaterialPageRoute(builder: (_) => const RandomPlayerScreen()),
+                          MaterialPageRoute(
+                              builder: (_) => const RandomPlayerScreen()),
                         );
                       }
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF7C5CFF),
-                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      backgroundColor: isGameOver
+                          ? const Color(0xFFFFAF36)
+                          : const Color(0xFF7C5CFF),
+                      padding: const EdgeInsets.symmetric(vertical: 18),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30),
                       ),
                       elevation: 6,
-                      shadowColor: const Color(0xFF7C5CFF).withOpacity(0.3),
                     ),
                     child: Text(
-                      isGameOver ? 'Hoàn thành' : 'Tiếp tục',
+                      isGameOver ? '🏆 Xem kết quả cuối' : '▶ Vòng tiếp theo',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
@@ -244,11 +264,14 @@ class ResultScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  // Back home button
+                  const SizedBox(height: 10),
+
+                  // Back home
                   TextButton(
                     onPressed: () {
-                      todProvider.reset();
+                      if (isGameOver) {
+                        todProvider.reset();
+                      }
                       Navigator.pushAndRemoveUntil(
                         context,
                         MaterialPageRoute(builder: (_) => const HomeScreen()),
@@ -258,24 +281,68 @@ class ResultScreen extends StatelessWidget {
                     child: const Text(
                       'Về trang chủ',
                       style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
                         color: AppColors.textSecondary,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 8),
                 ],
               ),
             ),
-          ), // SafeArea closed
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _statChip({
+    required IconData icon,
+    required Color iconColor,
+    required Color bgColor,
+    required String label,
+    required String value,
+    Color? valueColor,
+  }) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: iconColor, size: 20),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                color: valueColor ?? AppColors.textPrimary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-// Custom Painter to draw a beautiful 3D Golden Trophy
+// ─── Painters ─────────────────────────────────────────────────────────────────
+
 class GoldenTrophyPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -285,34 +352,27 @@ class GoldenTrophyPainter extends CustomPainter {
     final cx = w / 2;
     final cy = h / 2;
 
-    // Trophy highlight gold colors
     final Color goldLight = const Color(0xFFFFD54F);
     final Color goldDark = const Color(0xFFFFB300);
     final Color goldShadow = const Color(0xFFFF8F00);
 
-    // 1. Handles (Left and Right)
     paint.color = goldShadow;
-    // Left ear
     final Path leftEar = Path()
       ..moveTo(cx - 20, cy - 25)
       ..cubicTo(cx - 50, cy - 40, cx - 50, cy + 5, cx - 20, cy - 5)
       ..close();
     canvas.drawPath(leftEar, paint);
 
-    // Right ear
     final Path rightEar = Path()
       ..moveTo(cx + 20, cy - 25)
       ..cubicTo(cx + 50, cy - 40, cx + 50, cy + 5, cx + 20, cy - 5)
       ..close();
     canvas.drawPath(rightEar, paint);
 
-    // Cover inside of ears to make hollow rings
     paint.color = AppColors.background;
     canvas.drawCircle(Offset(cx - 32, cy - 14), 10, paint);
     canvas.drawCircle(Offset(cx + 32, cy - 14), 10, paint);
 
-    // 2. Bowl (Main body)
-    // Left side (light gold)
     paint.color = goldLight;
     final Path bowlLeft = Path()
       ..moveTo(cx, cy - 45)
@@ -321,7 +381,6 @@ class GoldenTrophyPainter extends CustomPainter {
       ..close();
     canvas.drawPath(bowlLeft, paint);
 
-    // Right side (dark gold)
     paint.color = goldDark;
     final Path bowlRight = Path()
       ..moveTo(cx, cy - 45)
@@ -330,28 +389,30 @@ class GoldenTrophyPainter extends CustomPainter {
       ..close();
     canvas.drawPath(bowlRight, paint);
 
-    // Rim of the bowl (Ellipse top)
     paint.color = const Color(0xFFFFE082);
-    canvas.drawOval(Rect.fromCenter(center: Offset(cx, cy - 45), width: 60, height: 10), paint);
+    canvas.drawOval(
+        Rect.fromCenter(center: Offset(cx, cy - 45), width: 60, height: 10),
+        paint);
 
-    // 3. Stem (Connection base)
     paint.color = goldShadow;
-    canvas.drawRect(Rect.fromCenter(center: Offset(cx, cy + 20), width: 14, height: 20), paint);
+    canvas.drawRect(
+        Rect.fromCenter(center: Offset(cx, cy + 20), width: 14, height: 20),
+        paint);
 
-    // 4. Base (Pedestal)
-    paint.color = const Color(0xFF5D4037); // Dark brown wood base
-    final RRect base = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: Offset(cx, cy + 38), width: 50, height: 16),
-      const Radius.circular(4),
+    paint.color = const Color(0xFF5D4037);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(cx, cy + 38), width: 50, height: 16),
+        const Radius.circular(4),
+      ),
+      paint,
     );
-    canvas.drawRRect(base, paint);
 
-    // 5. Star on trophy
     paint.color = Colors.white;
-    _drawTrophyStar(canvas, Offset(cx, cy - 18), 8, paint);
+    _drawStar(canvas, Offset(cx, cy - 18), 8, paint);
   }
 
-  void _drawTrophyStar(Canvas canvas, Offset offset, double size, Paint paint) {
+  void _drawStar(Canvas canvas, Offset offset, double size, Paint paint) {
     final Path path = Path()
       ..moveTo(offset.dx, offset.dy - size)
       ..quadraticBezierTo(offset.dx, offset.dy, offset.dx + size, offset.dy)
@@ -366,15 +427,12 @@ class GoldenTrophyPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// Background confetti painter decoration
 class ResultConfettiWidget extends StatelessWidget {
   const ResultConfettiWidget({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _ResultConfettiPainter(),
-    );
+    return CustomPaint(painter: _ResultConfettiPainter());
   }
 }
 
@@ -384,12 +442,12 @@ class _ResultConfettiPainter extends CustomPainter {
     final random = math.Random(10);
     final Paint paint = Paint()..style = PaintingStyle.fill;
 
-    final List<Color> colors = [
-      const Color(0xFFFF5B7F),
-      const Color(0xFF7C5CFF),
-      const Color(0xFF368DFF),
-      const Color(0xFF3DD99F),
-      const Color(0xFFFFAF36),
+    const colors = [
+      Color(0xFFFF5B7F),
+      Color(0xFF7C5CFF),
+      Color(0xFF368DFF),
+      Color(0xFF3DD99F),
+      Color(0xFFFFAF36),
     ];
 
     for (int i = 0; i < 30; i++) {
@@ -397,10 +455,9 @@ class _ResultConfettiPainter extends CustomPainter {
       double y = random.nextDouble() * size.height;
       double wSize = 4 + random.nextDouble() * 8;
       double hSize = 4 + random.nextDouble() * 8;
-      paint.color = colors[random.nextInt(colors.length)].withOpacity(0.5);
-
-      final Rect rect = Rect.fromLTWH(x, y, wSize, hSize);
-      canvas.drawRect(rect, paint);
+      paint.color =
+          colors[random.nextInt(colors.length)].withValues(alpha: 0.4);
+      canvas.drawRect(Rect.fromLTWH(x, y, wSize, hSize), paint);
     }
   }
 
