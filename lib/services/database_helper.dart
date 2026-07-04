@@ -5,7 +5,6 @@ import 'package:path/path.dart';
 import '../models/player_group.dart';
 import '../models/player.dart';
 import '../models/game_content.dart';
-import '../models/game_session.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -60,7 +59,9 @@ class DatabaseHelper {
         type TEXT NOT NULL,
         level TEXT NOT NULL,
         is_custom INTEGER DEFAULT 0,
-        is_active INTEGER DEFAULT 1
+        is_active INTEGER DEFAULT 1,
+        penalty_text TEXT,
+        points INTEGER
       )
     ''');
 
@@ -82,32 +83,164 @@ class DatabaseHelper {
   Future _insertDefaultGameContent(Database db) async {
     final contents = [
       // THẬT (Truth)
-      GameContent(content: 'Trong nhóm này, bạn tin tưởng ai nhất?', type: 'truth', level: 'fun'),
-      GameContent(content: 'Lần xấu hổ nhất của bạn là gì?', type: 'truth', level: 'fun'),
-      GameContent(content: 'Bạn đã từng tỏ tình thất bại bao giờ chưa?', type: 'truth', level: 'fun'),
-      GameContent(content: 'Có ai trong nhóm này mà bạn từng crush chưa?', type: 'truth', level: 'hardcore'),
-      GameContent(content: 'Nói ra một bí mật mà bạn giấu bố mẹ.', type: 'truth', level: 'hardcore'),
-      GameContent(content: 'Tật xấu lớn nhất của bạn khi ngủ là gì?', type: 'truth', level: 'fun'),
-      GameContent(content: 'Bạn từng giả vờ ốm để trốn học/trốn làm chưa?', type: 'truth', level: 'light'),
-      GameContent(content: 'Hãy kể về một lần bạn "bốc phét" bị phát hiện.', type: 'truth', level: 'fun'),
+      GameContent(
+        content: 'Trong nhóm này, bạn tin tưởng ai nhất?',
+        type: 'truth',
+        level: 'fun',
+        penaltyText: 'Hát một bài hát thiếu nhi trong 30 giây',
+        points: 20,
+      ),
+      GameContent(
+        content: 'Lần xấu hổ nhất của bạn là gì?',
+        type: 'truth',
+        level: 'fun',
+        penaltyText: 'Nhảy lò cò và kêu cục ta cục tác 5 lần',
+        points: 20,
+      ),
+      GameContent(
+        content: 'Bạn đã từng tỏ tình thất bại bao giờ chưa?',
+        type: 'truth',
+        level: 'fun',
+        penaltyText: 'Đứng nghiêm chào kiểu bộ đội trong 20 giây',
+        points: 20,
+      ),
+      GameContent(
+        content: 'Có ai trong nhóm này mà bạn từng crush chưa?',
+        type: 'truth',
+        level: 'hardcore',
+        penaltyText: 'Nhắn tin cho crush hoặc người yêu cũ "Em/Anh nhớ anh/em"',
+        points: 20,
+      ),
+      GameContent(
+        content: 'Nói ra một bí mật mà bạn giấu bố mẹ.',
+        type: 'truth',
+        level: 'hardcore',
+        penaltyText: 'Múa quạt hoặc nhảy Tiktok trong 15 giây',
+        points: 20,
+      ),
+      GameContent(
+        content: 'Tật xấu lớn nhất của bạn khi ngủ là gì?',
+        type: 'truth',
+        level: 'fun',
+        penaltyText: 'Làm động tác như đang ngủ say và ngáy ngủ to 10 giây',
+        points: 20,
+      ),
+      GameContent(
+        content: 'Bạn từng giả vờ ốm để trốn học/trốn làm chưa?',
+        type: 'truth',
+        level: 'light',
+        penaltyText: 'Khen 3 người trong nhóm một câu chân thành nhất',
+        points: 20,
+      ),
+      GameContent(
+        content: 'Hãy kể về một lần bạn "bốc phét" bị phát hiện.',
+        type: 'truth',
+        level: 'fun',
+        penaltyText: 'Cho người bên phải bẹo má trong 10 giây',
+        points: 20,
+      ),
       
       // THÁCH (Dare)
-      GameContent(content: 'Hát một bài hát thiếu nhi bằng giọng "chảy nước".', type: 'dare', level: 'fun'),
-      GameContent(content: 'Múa quạt hoặc nhảy Tiktok trong 15 giây.', type: 'dare', level: 'fun'),
-      GameContent(content: 'Chụp một tấm ảnh tự sướng làm mặt xấu nhất có thể và gửi vào group chat.', type: 'dare', level: 'hardcore'),
-      GameContent(content: 'Khen từng người trong nhóm một câu (không được giả trân).', type: 'dare', level: 'light'),
-      GameContent(content: 'Đổi avatar Facebook thành hình dìm của mình trong 1 ngày.', type: 'dare', level: 'hardcore'),
-      GameContent(content: 'Nhắn tin cho người yêu cũ (hoặc crush) với nội dung "Em/Anh dạo này ổn không?".', type: 'dare', level: 'hardcore'),
-      GameContent(content: 'Uống một ly nước lọc pha với một chút... nước mắm (hoặc chanh).', type: 'dare', level: 'hardcore'),
-      GameContent(content: 'Đứng lên, chắp tay và hô to: "Tôi là kẻ ngốc nhất thế gian!" 3 lần.', type: 'dare', level: 'fun'),
-      GameContent(content: 'Đưa điện thoại của bạn cho người bên phải, họ được quyền xem lịch sử duyệt web trong 30 giây.', type: 'dare', level: 'hardcore'),
+      GameContent(
+        content: 'Hát một bài hát thiếu nhi bằng giọng "chảy nước".',
+        type: 'dare',
+        level: 'fun',
+        penaltyText: 'Uống hết một cốc nước lọc liên tục không nghỉ',
+        points: 20,
+      ),
+      GameContent(
+        content: 'Múa quạt hoặc nhảy Tiktok trong 15 giây.',
+        type: 'dare',
+        level: 'fun',
+        penaltyText: 'Chống đẩy 10 cái tại chỗ',
+        points: 20,
+      ),
+      GameContent(
+        content: 'Chụp một tấm ảnh tự sướng làm mặt xấu nhất có thể và gửi vào group chat.',
+        type: 'dare',
+        level: 'hardcore',
+        penaltyText: 'Uống một hớp nước mắm hoặc ngậm chanh trong 10 giây',
+        points: 20,
+      ),
+      GameContent(
+        content: 'Khen từng người trong nhóm một câu (không được giả trân).',
+        type: 'dare',
+        level: 'light',
+        penaltyText: 'Đứng lò cò một chân trong 30 giây tiếp theo',
+        points: 20,
+      ),
+      GameContent(
+        content: 'Đổi avatar Facebook thành hình dìm của mình trong 1 ngày.',
+        type: 'dare',
+        level: 'hardcore',
+        penaltyText: 'Đứng dậy hô to "Tôi là kẻ ngốc nhất thế gian!" 3 lần',
+        points: 20,
+      ),
+      GameContent(
+        content: 'Nhắn tin cho người yêu cũ (hoặc crush) với nội dung "Em/Anh dạo này ổn không?".',
+        type: 'dare',
+        level: 'hardcore',
+        penaltyText: 'Mát-xa vai cho người ngồi bên phải trong 1 phút',
+        points: 20,
+      ),
+      GameContent(
+        content: 'Uống một ly nước lọc pha với một chút... nước mắm (hoặc chanh).',
+        type: 'dare',
+        level: 'hardcore',
+        penaltyText: 'Hát một đoạn nhạc rap bất kỳ',
+        points: 20,
+      ),
+      GameContent(
+        content: 'Đứng lên, chắp tay và hô to: "Tôi là kẻ ngốc nhất thế gian!" 3 lần.',
+        type: 'dare',
+        level: 'fun',
+        penaltyText: 'Để người bên trái vẽ một nét mực mèo lên má',
+        points: 20,
+      ),
+      GameContent(
+        content: 'Đưa điện thoại của bạn cho người bên phải, họ được quyền xem lịch sử duyệt web trong 30 giây.',
+        type: 'dare',
+        level: 'hardcore',
+        penaltyText: 'Kể chuyện cười hoặc làm trò cười trong 30 giây',
+        points: 20,
+      ),
 
       // LUẬT BÍ MẬT (Rule)
-      GameContent(content: 'Không được nói từ "Không".', type: 'rule', level: 'fun'),
-      GameContent(content: 'Phải kết thúc mỗi câu nói bằng từ "meo".', type: 'rule', level: 'fun'),
-      GameContent(content: 'Chỉ được dùng câu hỏi để giao tiếp.', type: 'rule', level: 'hardcore'),
-      GameContent(content: 'Khi ai đó gọi tên, bạn phải làm động tác chào cờ.', type: 'rule', level: 'fun'),
-      GameContent(content: 'Không được cười lộ răng.', type: 'rule', level: 'hardcore'),
+      GameContent(
+        content: 'Không được nói từ "Không".',
+        type: 'rule',
+        level: 'fun',
+        penaltyText: 'Nhảy múa tự do trong 15 giây',
+        points: 20,
+      ),
+      GameContent(
+        content: 'Phải kết thúc mỗi câu nói bằng từ "meo".',
+        type: 'rule',
+        level: 'fun',
+        penaltyText: 'Kêu tiếng mèo kêu meo meo 5 lần',
+        points: 20,
+      ),
+      GameContent(
+        content: 'Chỉ được dùng câu hỏi để giao tiếp.',
+        type: 'rule',
+        level: 'hardcore',
+        penaltyText: 'Đọc bảng chữ cái từ Z về A trong 20 giây',
+        points: 20,
+      ),
+      GameContent(
+        content: 'Khi ai đó gọi tên, bạn phải làm động tác chào cờ.',
+        type: 'rule',
+        level: 'fun',
+        penaltyText: 'Chống đẩy 5 cái',
+        points: 20,
+      ),
+      GameContent(
+        content: 'Không được cười lộ răng.',
+        type: 'rule',
+        level: 'hardcore',
+        penaltyText: 'Đóng vai một con khỉ trong 15 giây',
+        points: 20,
+      ),
     ];
 
     for (var content in contents) {
