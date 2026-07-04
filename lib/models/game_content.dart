@@ -5,6 +5,8 @@ class GameContent {
   final String level; // 'light', 'fun', 'hardcore'
   final bool isCustom;
   final bool isActive;
+  final String penaltyText;
+  final int points;
 
   GameContent({
     this.id,
@@ -13,7 +15,10 @@ class GameContent {
     required this.level,
     this.isCustom = false,
     this.isActive = true,
-  });
+    String? penaltyText,
+    int? points,
+  })  : penaltyText = penaltyText ?? (type == 'truth' ? 'Hát một bài hát thiếu nhi trong 30 giây' : 'Chạy quanh phòng 3 vòng'),
+        points = points ?? 20;
 
   Map<String, dynamic> toMap() {
     return {
@@ -23,6 +28,8 @@ class GameContent {
       'level': level,
       'is_custom': isCustom ? 1 : 0,
       'is_active': isActive ? 1 : 0,
+      'penalty_text': penaltyText,
+      'points': points,
     };
   }
 
@@ -34,6 +41,8 @@ class GameContent {
       level: map['level'],
       isCustom: map['is_custom'] == 1,
       isActive: map['is_active'] == 1,
+      penaltyText: map['penalty_text'],
+      points: map['points'],
     );
   }
 }
