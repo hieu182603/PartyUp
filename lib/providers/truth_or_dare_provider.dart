@@ -15,11 +15,42 @@ class TruthOrDareProvider with ChangeNotifier {
   final Random _random = Random();
   int? _lastPlayerId;
 
+  // Game configuration
+  int totalRounds = 5;
+  int currentRound = 1;
+  int timeLimit = 30; // seconds
+  int rewardPoints = 20;
+  int penaltyPoints = -10;
+
+  // Round stats
+  int correctCount = 0;
+  int skipCount = 0;
+  int pointsGained = 0;
+  int turnInRound = 0;
+
   void reset() {
     _currentPlayer = null;
     _currentContent = null;
     _state = 'selecting_player';
     _lastPlayerId = null;
+    currentRound = 1;
+    turnInRound = 0;
+    correctCount = 0;
+    skipCount = 0;
+    pointsGained = 0;
+    notifyListeners();
+  }
+
+  void configureGame({
+    required int rounds,
+    required int time,
+    required int reward,
+    required int penalty,
+  }) {
+    totalRounds = rounds;
+    timeLimit = time;
+    rewardPoints = reward;
+    penaltyPoints = penalty;
     notifyListeners();
   }
 
@@ -40,6 +71,29 @@ class TruthOrDareProvider with ChangeNotifier {
   void chooseType(GameContent content) {
     _currentContent = content;
     _state = 'playing';
+    notifyListeners();
+  }
+
+  void recordAnswer(int points) {
+    correctCount++;
+    pointsGained += points;
+    turnInRound++;
+    notifyListeners();
+  }
+
+  void recordSkip(int points) {
+    skipCount++;
+    pointsGained += points;
+    turnInRound++;
+    notifyListeners();
+  }
+
+  void nextRound() {
+    currentRound++;
+    turnInRound = 0;
+    correctCount = 0;
+    skipCount = 0;
+    pointsGained = 0;
     notifyListeners();
   }
 
