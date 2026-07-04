@@ -1,153 +1,359 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../core/theme/app_colors.dart';
-import '../providers/group_provider.dart';
-import 'group_setup_screen.dart';
+import '../core/app_notification.dart';
+import 'categories_screen.dart';
+import 'history_screen.dart';
+import 'leaderboard_screen.dart';
+import 'settings_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int _currentTabIndex = 0;
+
+  void _onGameCardTap(BuildContext context, String modeName) {
+    if (modeName == 'truth_or_dare') {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen()));
+    } else {
+      AppNotification.info(context, 'Chức năng đang phát triển, sớm ra mắt! 🚀');
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final List<Widget> tabBodies = [
+      _buildHomeBody(context),
+      const HistoryScreen(),
+      const LeaderboardScreen(),
+      const SettingsScreen(),
+    ];
+
     return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Xin chào! 👋',
-                        style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 28),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Hôm nay nhóm bạn\nmuốn chơi gì?',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 16),
-                      ),
-                    ],
-                  ),
-                  const CircleAvatar(
-                    radius: 30,
-                    backgroundColor: AppColors.secondary,
-                    child: Icon(Icons.person, color: Colors.white, size: 30),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 40),
-              Expanded(
-                child: ListView(
-                  physics: const BouncingScrollPhysics(),
-                  children: [
-                    _buildMenuCard(
-                      context,
-                      title: 'Chơi ngay',
-                      subtitle: 'Bắt đầu một ván mới',
-                      icon: Icons.play_arrow_rounded,
-                      color: AppColors.warning,
-                      onTap: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const GroupSetupScreen()));
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    _buildMenuCard(
-                      context,
-                      title: 'Tiếp tục',
-                      subtitle: 'Chơi ván đang dở',
-                      icon: Icons.restore,
-                      color: AppColors.success,
-                      onTap: () {
-                        // TODO: Handle continue
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Chức năng đang phát triển')),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    _buildMenuCard(
-                      context,
-                      title: 'Lịch sử',
-                      subtitle: 'Xem lại các ván chơi',
-                      icon: Icons.history,
-                      color: AppColors.primary,
-                      onTap: () {
-                        // TODO: Handle history
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Chức năng đang phát triển')),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    _buildMenuCard(
-                      context,
-                      title: 'Leaderboard',
-                      subtitle: 'Xem bảng xếp hạng',
-                      icon: Icons.emoji_events,
-                      color: AppColors.secondary,
-                      onTap: () {
-                        // TODO: Handle leaderboard
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Chức năng đang phát triển')),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+      backgroundColor: AppColors.background,
+      body: tabBodies[_currentTabIndex],
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 15,
+              offset: const Offset(0, -4),
+            ),
+          ],
         ),
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: AppColors.textSecondary,
-        showUnselectedLabels: true,
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Trang chủ'),
-          BottomNavigationBarItem(icon: Icon(Icons.group), label: 'Nhóm'),
-          BottomNavigationBarItem(icon: Icon(Icons.videogame_asset), label: 'Chơi'),
-          BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Lịch sử'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Cài đặt'),
-        ],
+        child: BottomNavigationBar(
+          currentIndex: _currentTabIndex,
+          selectedItemColor: const Color(0xFF7C5CFF),
+          unselectedItemColor: AppColors.textSecondary,
+          showUnselectedLabels: true,
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.white,
+          elevation: 0,
+          onTap: (index) {
+            setState(() {
+              _currentTabIndex = index;
+            });
+          },
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Trang chủ'),
+            BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Lịch sử'),
+            BottomNavigationBarItem(icon: Icon(Icons.emoji_events_outlined), label: 'Bảng xếp hạng'),
+            BottomNavigationBarItem(icon: Icon(Icons.settings_outlined), label: 'Cài đặt'),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildMenuCard(BuildContext context, {required String title, required String subtitle, required IconData icon, required Color color, required VoidCallback onTap}) {
+  Widget _buildHomeBody(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 16),
+            // Header Row: Avatar, Name, Coins display
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.06),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: Image.network(
+                          'https://api.dicebear.com/7.x/lorelei/png?seed=Minh',
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, progress) {
+                            if (progress == null) return child;
+                            return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            return const CircleAvatar(
+                              backgroundColor: AppColors.warning,
+                              child: Icon(Icons.person, color: Colors.white),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Xin chào, Minh! 👋',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          'Level 5',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondary.withOpacity(0.8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                // Coins Pill Container
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF7E6),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFFFECC0), width: 1),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.star_rounded, color: AppColors.warning, size: 18),
+                      SizedBox(width: 4),
+                      Text(
+                        '1200',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFFC69100),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 32),
+            // Main Heading
+            const Text(
+              'Sẵn sàng cho\nđêm tiệc chưa?',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+                color: AppColors.textPrimary,
+                height: 1.3,
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Scrollable Menu List
+            Expanded(
+              child: ListView(
+                physics: const BouncingScrollPhysics(),
+                children: [
+                  // Game Card 1: Truth or Dare
+                  _buildGameCard(
+                    context,
+                    title: 'Truth or Dare',
+                    subtitle: 'Chơi ngay',
+                    icon: Icons.casino_outlined,
+                    gradient: AppColors.truthGradient,
+                    onTap: () => _onGameCardTap(context, 'truth_or_dare'),
+                  ),
+                  const SizedBox(height: 16),
+                  // Game Card 2: Lucky Wheel
+                  _buildGameCard(
+                    context,
+                    title: 'Lucky Wheel',
+                    subtitle: 'Vòng quay may mắn',
+                    icon: Icons.wb_sunny_outlined,
+                    gradient: AppColors.luckyWheelGradient,
+                    onTap: () => _onGameCardTap(context, 'lucky_wheel'),
+                  ),
+                  const SizedBox(height: 16),
+                  // Game Card 3: Secret Rule
+                  _buildGameCard(
+                    context,
+                    title: 'Secret Rule',
+                    subtitle: 'Luật bí mật',
+                    icon: Icons.theater_comedy_outlined,
+                    gradient: AppColors.secretRuleGradient,
+                    onTap: () => _onGameCardTap(context, 'secret_rule'),
+                  ),
+                  const SizedBox(height: 16),
+                  // Game Card 4: Mini Games
+                  _buildGameCard(
+                    context,
+                    title: 'Mini Games',
+                    subtitle: 'Thử thách vui nhộn',
+                    icon: Icons.sports_esports_outlined,
+                    gradient: AppColors.miniGamesGradient,
+                    onTap: () => _onGameCardTap(context, 'mini_games'),
+                  ),
+                  const SizedBox(height: 24),
+                  // Continue Game Card
+                  _buildContinueCard(
+                    context,
+                    title: 'Tiếp tục trò chơi',
+                    subtitle: 'Bạn đang chơi dở một trò chơi',
+                    onTap: () {
+                      AppNotification.info(context, 'Chưa có trò chơi đang dở. Hãy bắt đầu một trò mới! 🎮');
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGameCard(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required LinearGradient gradient,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(20),
+        height: 100,
+        decoration: BoxDecoration(
+          gradient: gradient,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: gradient.colors.first.withOpacity(0.3),
+              blurRadius: 15,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            // Decorative background circle
+            Positioned(
+              right: -10,
+              top: -10,
+              child: Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.08),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.18),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, color: Colors.white, size: 28),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white.withOpacity(0.85),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 18),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContinueCard(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 18.0),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.1),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
+          border: Border.all(color: const Color(0xFFE8EBF3), width: 1.5),
         ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+              padding: const EdgeInsets.all(12),
+              decoration: const BoxDecoration(
+                color: Color(0xFFF0F4FD),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: color, size: 32),
+              child: const Icon(Icons.restore, color: Color(0xFF7C5CFF), size: 24),
             ),
-            const SizedBox(width: 20),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -155,23 +361,24 @@ class HomeScreen extends StatelessWidget {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
                       color: AppColors.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
                     subtitle,
                     style: const TextStyle(
-                      fontSize: 14,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
                       color: AppColors.textSecondary,
                     ),
                   ),
                 ],
               ),
             ),
-            Icon(Icons.arrow_forward_ios, color: Colors.grey[300], size: 16),
+            const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.textSecondary, size: 16),
           ],
         ),
       ),
