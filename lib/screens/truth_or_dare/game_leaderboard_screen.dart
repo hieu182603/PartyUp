@@ -5,6 +5,7 @@ import '../../core/theme/app_colors.dart';
 import '../../providers/player_provider.dart';
 import '../../providers/truth_or_dare_provider.dart';
 import '../../services/database_helper.dart';
+import '../../providers/group_provider.dart';
 import '../home_screen.dart';
 import 'result_screen.dart';
 
@@ -67,6 +68,26 @@ class GameLeaderboardScreen extends StatelessWidget {
                       color: AppColors.textPrimary,
                     ),
                     textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  // Team Name
+                  Consumer<GroupProvider>(
+                    builder: (context, groupProvider, child) {
+                      final teamName = groupProvider.currentGroup?.name ?? '';
+                      if (teamName.isEmpty) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: Text(
+                          'Đội: $teamName',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF7C5CFF),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 4),
                   const Text(
