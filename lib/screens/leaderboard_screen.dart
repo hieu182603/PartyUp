@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/theme/app_colors.dart';
 import '../providers/player_provider.dart';
 import '../services/database_helper.dart';
+import 'group_details_screen.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
@@ -99,12 +100,23 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
         }
         
         final mappedList = list.map((e) => {
+          'id': e['id'] as int,
           'name': e['name'] as String,
-          'score': e['total_score'] as int,
+          'score': (e['total_score'] as num?)?.toInt() ?? 0,
           'avatarSeed': e['name'] as String,
         }).toList();
 
-        return _buildLeaderboardContent(mappedList);
+        return _buildLeaderboardContent(mappedList, onItemTap: (item) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => GroupDetailsScreen(
+                groupId: item['id'] as int,
+                groupName: item['name'] as String,
+              ),
+            ),
+          );
+        });
       },
     );
   }
@@ -119,25 +131,19 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
     );
   }
 
-  Widget _buildLeaderboardContent(List<Map<String, dynamic>> listData) {
-    String firstPlaceName = '';
-    int firstPlaceScore = 0;
-    String secondPlaceName = '';
-    int secondPlaceScore = 0;
-    String thirdPlaceName = '';
-    int thirdPlaceScore = 0;
+  Widget _buildLeaderboardContent(List<Map<String, dynamic>> listData, {void Function(Map<String, dynamic>)? onItemTap}) {
+    Map<String, dynamic>? firstItem;
+    Map<String, dynamic>? secondItem;
+    Map<String, dynamic>? thirdItem;
 
     if (listData.isNotEmpty) {
-      firstPlaceName = listData[0]['name'];
-      firstPlaceScore = listData[0]['score'];
+      firstItem = listData[0];
     }
     if (listData.length > 1) {
-      secondPlaceName = listData[1]['name'];
-      secondPlaceScore = listData[1]['score'];
+      secondItem = listData[1];
     }
     if (listData.length > 2) {
-      thirdPlaceName = listData[2]['name'];
-      thirdPlaceScore = listData[2]['score'];
+      thirdItem = listData[2];
     }
 
     final remainingPlayers = listData.length > 3 ? listData.sublist(3) : [];
@@ -155,37 +161,40 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (listData.length > 1)
+                  if (secondItem != null)
                     _buildPodiumColumn(
-                      name: secondPlaceName,
-                      score: secondPlaceScore,
+                      name: secondItem['name'],
+                      score: secondItem['score'],
                       rank: 2,
                       height: 110,
-                      avatarSeed: secondPlaceName,
+                      avatarSeed: secondItem['avatarSeed'],
                       color: const Color(0xFFE8EBF3),
+                      onTap: onItemTap != null ? () => onItemTap(secondItem!) : null,
                     )
                   else
                     const SizedBox(width: 80),
                   const SizedBox(width: 16),
-                  if (listData.isNotEmpty)
+                  if (firstItem != null)
                     _buildPodiumColumn(
-                      name: firstPlaceName,
-                      score: firstPlaceScore,
+                      name: firstItem['name'],
+                      score: firstItem['score'],
                       rank: 1,
                       height: 145,
-                      avatarSeed: firstPlaceName,
+                      avatarSeed: firstItem['avatarSeed'],
                       color: const Color(0xFFFFF7E6),
                       hasCrown: true,
+                      onTap: onItemTap != null ? () => onItemTap(firstItem!) : null,
                     ),
                   const SizedBox(width: 16),
-                  if (listData.length > 2)
+                  if (thirdItem != null)
                     _buildPodiumColumn(
-                      name: thirdPlaceName,
-                      score: thirdPlaceScore,
+                      name: thirdItem['name'],
+                      score: thirdItem['score'],
                       rank: 3,
                       height: 95,
-                      avatarSeed: thirdPlaceName,
+                      avatarSeed: thirdItem['avatarSeed'],
                       color: const Color(0xFFFFECEF),
+                      onTap: onItemTap != null ? () => onItemTap(thirdItem!) : null,
                     )
                   else
                     const SizedBox(width: 80),
@@ -202,16 +211,18 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                     final item = remainingPlayers[index];
                     final rank = index + 4;
 
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFFE8EBF3), width: 1.5),
-                      ),
-                      child: Row(
-                        children: [
+                    return GestureDetector(
+                      onTap: onItemTap != null ? () => onItemTap(item) : null,
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFE8EBF3), width: 1.5),
+                        ),
+                        child: Row(
+                          children: [
                           // Rank Number
                           Text(
                             '$rank',
@@ -265,7 +276,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                               ),
                             ),
                           ),
-                        ],
+                          ],
+                        ),
                       ),
                     );
                   },
@@ -286,11 +298,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
     required String avatarSeed,
     required Color color,
     bool hasCrown = false,
+    VoidCallback? onTap,
   }) {
     return Expanded(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
           // Avatar
           Stack(
             clipBehavior: Clip.none,
@@ -389,7 +404,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
               ),
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
