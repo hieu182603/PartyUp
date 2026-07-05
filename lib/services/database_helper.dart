@@ -412,12 +412,29 @@ class DatabaseHelper {
   Future<List<Map<String, dynamic>>> getGroupLeaderboard() async {
     final db = await database;
     return await db.rawQuery('''
-      SELECT g.id, g.name, COALESCE(SUM(p.score), 0) as total_score
+      SELECT g.id, g.name,
+        COALESCE(SUM(st.points_change), 0) as total_score
       FROM player_groups g
-      LEFT JOIN players p ON g.id = p.group_id
-      GROUP BY g.id
-      ORDER BY total_score DESC
+      LEFT JOIN game_sessions s ON s.group_id = g.id AND s.ended_at IS NOT NULL
+      LEFT JOIN session_turns st ON st.session_id = s.id
+      GROUP BY g.id, g.name
+      ORDER BY total_score DESC, g.id ASC
     ''');
+  }
+
+  Future<List<Player>> getPlayersWithTotalScoreByGroup(int groupId) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT p.id, p.group_id, p.name, p.avatar, p.penalty,
+             COALESCE(SUM(st.points_change), 0) as score
+      FROM players p
+      LEFT JOIN game_sessions s ON s.group_id = p.group_id AND s.ended_at IS NOT NULL
+      LEFT JOIN session_turns st ON st.session_id = s.id AND st.player_name = p.name
+      WHERE p.group_id = ?
+      GROUP BY p.id, p.group_id, p.name, p.avatar, p.penalty
+      ORDER BY score DESC
+    ''', [groupId]);
+    return result.map((json) => Player.fromMap(json)).toList();
   }
 
   // Game Content Operations

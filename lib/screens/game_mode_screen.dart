@@ -3,6 +3,7 @@ import '../core/theme/app_colors.dart';
 import '../core/app_notification.dart';
 import 'package:provider/provider.dart';
 import '../providers/group_provider.dart';
+import '../providers/player_provider.dart';
 import '../providers/truth_or_dare_provider.dart';
 import '../models/game_session.dart';
 import '../services/database_helper.dart';
@@ -42,6 +43,9 @@ class GameModeScreen extends StatelessWidget {
                 onTap: () async {
                   final groupProvider = Provider.of<GroupProvider>(context, listen: false);
                   final tdProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
+                  final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+                  // Reset scores before new session to prevent cumulative inflation
+                  await playerProvider.resetScores();
                   if (groupProvider.currentGroup != null) {
                     final session = GameSession(groupId: groupProvider.currentGroup!.id!, gameMode: 'truth_or_dare');
                     final sessionId = await DatabaseHelper.instance.createGameSession(session);

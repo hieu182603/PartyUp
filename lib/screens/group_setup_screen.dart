@@ -179,7 +179,8 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
   }
 
   void _startGame() async {
-    final players = Provider.of<PlayerProvider>(context, listen: false).players;
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final players = playerProvider.players;
     if (players.length < 2) {
       AppNotification.warning(context, 'Cần ít nhất 2 người chơi để bắt đầu!');
       return;
@@ -188,6 +189,10 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
     final groupProvider = Provider.of<GroupProvider>(context, listen: false);
     final tdProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
     
+    // Reset player scores to 0 before starting a new session
+    // so endSession saves only per-session scores (not cumulative)
+    await playerProvider.resetScores();
+
     if (groupProvider.currentGroup != null) {
       final session = GameSession(groupId: groupProvider.currentGroup!.id!, gameMode: 'truth_or_dare');
       final sessionId = await DatabaseHelper.instance.createGameSession(session);

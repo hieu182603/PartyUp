@@ -32,8 +32,8 @@ class Player {
       groupId: map['group_id'],
       name: map['name'],
       avatar: map['avatar'],
-      score: map['score'] ?? 0,
-      penalty: map['penalty'] ?? 0,
+      score: (map['score'] as num?)?.toInt() ?? 0,
+      penalty: (map['penalty'] as num?)?.toInt() ?? 0,
     );
   }
 
