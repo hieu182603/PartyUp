@@ -5,6 +5,7 @@ import '../core/app_notification.dart';
 import '../providers/truth_or_dare_provider.dart';
 import '../providers/player_provider.dart';
 import '../providers/group_provider.dart';
+import '../providers/game_content_provider.dart';
 import 'group_setup_screen.dart';
 
 class GameCustomizationScreen extends StatefulWidget {
@@ -13,7 +14,8 @@ class GameCustomizationScreen extends StatefulWidget {
   const GameCustomizationScreen({super.key, required this.categories});
 
   @override
-  State<GameCustomizationScreen> createState() => _GameCustomizationScreenState();
+  State<GameCustomizationScreen> createState() =>
+      _GameCustomizationScreenState();
 }
 
 class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
@@ -27,14 +29,78 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
   final List<int> _rewardPoints = [10, 20, 30];
   final List<int> _penaltyPoints = [-15, -10, -5];
   final List<int> _rounds = [3, 5, 7, 10];
-  final List<String> _difficultyLabels = ['Tất cả', 'Nhẹ nhàng', 'Vui vẻ', 'Thử thách', 'Kịch tính'];
-  final List<String?> _difficultyValues = [null, 'easy', 'medium', 'hard', 'extreme'];
+  List<String> _difficultyLabels = ['Tất cả'];
+  List<String?> _difficultyValues = [null];
+  final TextEditingController _teamNameController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadDifficulties();
+      // Đã xóa đoạn gán tên groupProvider.currentGroup!.name vào _teamNameController
+    });
+  }
+
+  @override
+  void dispose() {
+    _teamNameController.dispose();
+    super.dispose();
+  }
+
+  void _loadDifficulties() {
+    final provider = Provider.of<GameContentProvider>(context, listen: false);
+    var contents = [...provider.truths, ...provider.dares, ...provider.rules];
+
+    if (widget.categories.isNotEmpty &&
+        !widget.categories.contains('Tổng hợp') &&
+        !widget.categories.contains('Tất cả')) {
+      contents = contents
+          .where((c) => widget.categories.contains(c.category))
+          .toList();
+    }
+
+    final uniqueLevels = contents
+        .map((c) => c.level)
+        .where((l) => l.isNotEmpty)
+        .toSet()
+        .toList();
+
+    // Sort to have a consistent order (e.g., easy, medium, hard) if possible
+    final predefinedOrder = ['easy', 'medium', 'hard', 'extreme', '18+'];
+    uniqueLevels.sort((a, b) {
+      int indexA = predefinedOrder.indexOf(a);
+      int indexB = predefinedOrder.indexOf(b);
+      if (indexA == -1) indexA = 999;
+      if (indexB == -1) indexB = 999;
+      if (indexA == indexB) return a.compareTo(b);
+      return indexA.compareTo(indexB);
+    });
+
+    setState(() {
+      _difficultyLabels = ['Tất cả', ...uniqueLevels];
+      _difficultyValues = [null, ...uniqueLevels];
+      _difficultyIndex = 0;
+    });
+  }
 
   void _onStart() async {
+    final teamName = _teamNameController.text.trim();
+    if (teamName.isEmpty) {
+      AppNotification.warning(context, 'Vui lòng nhập tên đội chơi!');
+      return;
+    }
+
     try {
-      final todProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
+      final todProvider = Provider.of<TruthOrDareProvider>(
+        context,
+        listen: false,
+      );
       final groupProvider = Provider.of<GroupProvider>(context, listen: false);
-      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+      final playerProvider = Provider.of<PlayerProvider>(
+        context,
+        listen: false,
+      );
 
       // Save configuration in provider
       todProvider.configureGame(
@@ -46,10 +112,15 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
         difficulty: _difficultyValues[_difficultyIndex],
       );
 
-      // Initialize group if not present
+      // Initialize or update group
       if (groupProvider.currentGroup == null) {
-        await groupProvider.createGroup("Spinix Party");
+        await groupProvider.createGroup(teamName);
         playerProvider.clearPlayers();
+      } else if (groupProvider.currentGroup!.name != teamName) {
+        await groupProvider.updateGroupName(
+          groupProvider.currentGroup!.id!,
+          teamName,
+        );
       }
 
       if (mounted) {
@@ -77,13 +148,21 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
       appBar: AppBar(
         title: const Text(
           'Tùy chỉnh trò chơi',
-          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: AppColors.textPrimary),
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            fontSize: 20,
+            color: AppColors.textPrimary,
+          ),
         ),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: AppColors.textPrimary,
+            size: 20,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -106,6 +185,58 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  // Team name setting
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: const Color(0xFFE8EBF3),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF7C5CFF).withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.group_rounded,
+                            color: Color(0xFF7C5CFF),
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextField(
+                            controller: _teamNameController,
+                            decoration: const InputDecoration(
+                              hintText: 'Nhập tên đội chơi...',
+                              border: InputBorder.none,
+                              hintStyle: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   _buildCustomRow(
                     icon: Icons.access_time_filled_rounded,
                     iconColor: const Color(0xFFFF5B7F),
@@ -120,10 +251,16 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                                 _timeLimitIndex--;
                               });
                             } else {
-                              AppNotification.warning(context, 'Thời gian tối thiểu là ${_timeLimits.first} giây!');
+                              AppNotification.warning(
+                                context,
+                                'Thời gian tối thiểu là ${_timeLimits.first} giây!',
+                              );
                             }
                           },
-                          icon: const Icon(Icons.remove_circle_outline_rounded, color: AppColors.textSecondary),
+                          icon: const Icon(
+                            Icons.remove_circle_outline_rounded,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                         Text(
                           '$activeTime giây',
@@ -140,10 +277,16 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                                 _timeLimitIndex++;
                               });
                             } else {
-                              AppNotification.warning(context, 'Thời gian tối đa là ${_timeLimits.last} giây!');
+                              AppNotification.warning(
+                                context,
+                                'Thời gian tối đa là ${_timeLimits.last} giây!',
+                              );
                             }
                           },
-                          icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.textSecondary),
+                          icon: const Icon(
+                            Icons.add_circle_outline_rounded,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                       ],
                     ),
@@ -164,10 +307,16 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                                 _rewardPointsIndex--;
                               });
                             } else {
-                              AppNotification.warning(context, 'Điểm cộng tối thiểu là +${_rewardPoints.first}!');
+                              AppNotification.warning(
+                                context,
+                                'Điểm cộng tối thiểu là +${_rewardPoints.first}!',
+                              );
                             }
                           },
-                          icon: const Icon(Icons.remove_circle_outline_rounded, color: AppColors.textSecondary),
+                          icon: const Icon(
+                            Icons.remove_circle_outline_rounded,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                         Text(
                           '+$activeReward điểm',
@@ -184,10 +333,16 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                                 _rewardPointsIndex++;
                               });
                             } else {
-                              AppNotification.warning(context, 'Điểm cộng tối đa là +${_rewardPoints.last}!');
+                              AppNotification.warning(
+                                context,
+                                'Điểm cộng tối đa là +${_rewardPoints.last}!',
+                              );
                             }
                           },
-                          icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.textSecondary),
+                          icon: const Icon(
+                            Icons.add_circle_outline_rounded,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                       ],
                     ),
@@ -208,10 +363,16 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                                 _penaltyPointsIndex--;
                               });
                             } else {
-                              AppNotification.warning(context, 'Điểm phạt tối đa là ${_penaltyPoints.first}!');
+                              AppNotification.warning(
+                                context,
+                                'Điểm phạt tối đa là ${_penaltyPoints.first}!',
+                              );
                             }
                           },
-                          icon: const Icon(Icons.remove_circle_outline_rounded, color: AppColors.textSecondary),
+                          icon: const Icon(
+                            Icons.remove_circle_outline_rounded,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                         Text(
                           '$activePenalty điểm',
@@ -223,15 +384,22 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                         ),
                         IconButton(
                           onPressed: () {
-                            if (_penaltyPointsIndex < _penaltyPoints.length - 1) {
+                            if (_penaltyPointsIndex <
+                                _penaltyPoints.length - 1) {
                               setState(() {
                                 _penaltyPointsIndex++;
                               });
                             } else {
-                              AppNotification.warning(context, 'Điểm phạt tối thiểu là ${_penaltyPoints.last}!');
+                              AppNotification.warning(
+                                context,
+                                'Điểm phạt tối thiểu là ${_penaltyPoints.last}!',
+                              );
                             }
                           },
-                          icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.textSecondary),
+                          icon: const Icon(
+                            Icons.add_circle_outline_rounded,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                       ],
                     ),
@@ -252,10 +420,16 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                                 _roundsIndex--;
                               });
                             } else {
-                              AppNotification.warning(context, 'Số vòng chơi tối thiểu là ${_rounds.first}!');
+                              AppNotification.warning(
+                                context,
+                                'Số vòng chơi tối thiểu là ${_rounds.first}!',
+                              );
                             }
                           },
-                          icon: const Icon(Icons.remove_circle_outline_rounded, color: AppColors.textSecondary),
+                          icon: const Icon(
+                            Icons.remove_circle_outline_rounded,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                         Text(
                           '$activeRounds vòng',
@@ -272,10 +446,16 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                                 _roundsIndex++;
                               });
                             } else {
-                              AppNotification.warning(context, 'Số vòng chơi tối đa là ${_rounds.last}!');
+                              AppNotification.warning(
+                                context,
+                                'Số vòng chơi tối đa là ${_rounds.last}!',
+                              );
                             }
                           },
-                          icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.textSecondary),
+                          icon: const Icon(
+                            Icons.add_circle_outline_rounded,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                       ],
                     ),
@@ -296,10 +476,16 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                                 _difficultyIndex--;
                               });
                             } else {
-                              AppNotification.warning(context, 'Mức độ thấp nhất là ${_difficultyLabels.first}!');
+                              AppNotification.warning(
+                                context,
+                                'Mức độ thấp nhất là ${_difficultyLabels.first}!',
+                              );
                             }
                           },
-                          icon: const Icon(Icons.remove_circle_outline_rounded, color: AppColors.textSecondary),
+                          icon: const Icon(
+                            Icons.remove_circle_outline_rounded,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                         Text(
                           _difficultyLabels[_difficultyIndex],
@@ -311,15 +497,22 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                         ),
                         IconButton(
                           onPressed: () {
-                            if (_difficultyIndex < _difficultyLabels.length - 1) {
+                            if (_difficultyIndex <
+                                _difficultyLabels.length - 1) {
                               setState(() {
                                 _difficultyIndex++;
                               });
                             } else {
-                              AppNotification.warning(context, 'Mức độ cao nhất là ${_difficultyLabels.last}!');
+                              AppNotification.warning(
+                                context,
+                                'Mức độ cao nhất là ${_difficultyLabels.last}!',
+                              );
                             }
                           },
-                          icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.textSecondary),
+                          icon: const Icon(
+                            Icons.add_circle_outline_rounded,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                       ],
                     ),
@@ -340,12 +533,19 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                     decoration: BoxDecoration(
                       color: const Color(0xFFF2F4FD),
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: const Color(0xFFDDD9FA), width: 1),
+                      border: Border.all(
+                        color: const Color(0xFFDDD9FA),
+                        width: 1,
+                      ),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.info_rounded, color: Color(0xFF7C5CFF), size: 24),
+                        const Icon(
+                          Icons.info_rounded,
+                          color: Color(0xFF7C5CFF),
+                          size: 24,
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(

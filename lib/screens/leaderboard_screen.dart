@@ -18,7 +18,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
   }
 
   @override
@@ -50,7 +50,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
           tabs: const [
             Tab(text: 'Toàn Cầu'),
             Tab(text: 'Các Nhóm'),
-            Tab(text: 'Nhóm Hiện Tại'),
           ],
         ),
       ),
@@ -59,7 +58,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
         children: [
           _buildGlobalTab(),
           _buildGroupsTab(),
-          _buildCurrentGroupTab(),
         ],
       ),
     );
@@ -111,23 +109,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
     );
   }
 
-  Widget _buildCurrentGroupTab() {
-    final playerProvider = Provider.of<PlayerProvider>(context);
-    final activePlayers = playerProvider.players;
-    
-    if (activePlayers.isEmpty) {
-      return _buildEmptyState('Chưa có người chơi nào trong nhóm.');
-    }
-
-    final listData = List.from(activePlayers)..sort((a, b) => b.score.compareTo(a.score));
-    final mappedList = listData.map((e) => {
-      'name': e.name as String,
-      'score': e.score as int,
-      'avatarSeed': e.name as String,
-    }).toList();
-
-    return _buildLeaderboardContent(mappedList);
-  }
 
   Widget _buildEmptyState(String message) {
     return Center(

@@ -29,6 +29,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onGameCardTap(BuildContext context, String modeName) {
     if (modeName == 'truth_or_dare') {
+      final todProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
+      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+      
+      todProvider.reset();
+      playerProvider.resetScores();
+
       Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen()));
     } else {
       AppNotification.info(context, 'Chức năng đang phát triển, sớm ra mắt! 🚀');
@@ -223,7 +229,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   // Continue Game Card - only show when there is an ongoing game
                   Consumer<TruthOrDareProvider>(
                     builder: (context, todProvider, _) {
-                      if (todProvider.currentSessionId == null) return const SizedBox.shrink();
+                      if (todProvider.currentSessionId == null || todProvider.isGameOver) return const SizedBox.shrink();
                       final roundInfo = 'Vòng ${todProvider.currentRound}/${todProvider.totalRounds} • Truth or Dare';
                       return Column(
                         children: [
