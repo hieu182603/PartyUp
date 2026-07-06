@@ -363,14 +363,47 @@ class DatabaseHelper {
 
   Future<void> deleteSession(int sessionId) async {
     final db = await instance.database;
+    
+    // Deduct points from global_players
+    final List<Map<String, dynamic>> sessionTurns = await db.query('session_turns', where: 'session_id = ?', whereArgs: [sessionId]);
+    Map<String, int> scoresToDeduct = {};
+    Map<String, int> penaltiesToDeduct = {};
+    
+    for (var turn in sessionTurns) {
+      final player = turn['player_name'] as String;
+      final pointsChange = turn['points_change'] as int;
+      if (pointsChange > 0) {
+        scoresToDeduct[player] = (scoresToDeduct[player] ?? 0) + pointsChange;
+      } else if (pointsChange < 0) {
+        penaltiesToDeduct[player] = (penaltiesToDeduct[player] ?? 0) + pointsChange.abs();
+      }
+    }
+    
+    for (var player in {...scoresToDeduct.keys, ...penaltiesToDeduct.keys}) {
+      final score = scoresToDeduct[player] ?? 0;
+      final penalty = penaltiesToDeduct[player] ?? 0;
+      await db.rawUpdate('''
+        UPDATE global_players 
+        SET total_score = MAX(0, total_score - ?),
+            total_penalty = MAX(0, total_penalty - ?)
+        WHERE name = ?
+      ''', [score, penalty, player]);
+    }
+    
+    await db.delete('session_turns', where: 'session_id = ?', whereArgs: [sessionId]);
     await db.delete('session_scores', where: 'session_id = ?', whereArgs: [sessionId]);
     await db.delete('game_sessions', where: 'id = ?', whereArgs: [sessionId]);
+    
+    // Clean up empty global players
+    await db.delete('global_players', where: 'total_score = 0 AND total_penalty = 0');
   }
 
   Future<void> clearAllHistory() async {
     final db = await instance.database;
+    await db.delete('session_turns');
     await db.delete('session_scores');
     await db.delete('game_sessions');
+    await db.delete('global_players');
   }
 
   Future<List<Map<String, dynamic>>> getSessionScores(int sessionId) async {
@@ -415,10 +448,10 @@ class DatabaseHelper {
       SELECT g.id, g.name,
         COALESCE(SUM(st.points_change), 0) as total_score
       FROM player_groups g
-      LEFT JOIN game_sessions s ON s.group_id = g.id AND s.ended_at IS NOT NULL
+      INNER JOIN game_sessions s ON s.group_id = g.id AND s.ended_at IS NOT NULL
       LEFT JOIN session_turns st ON st.session_id = s.id
       GROUP BY g.id, g.name
-      ORDER BY total_score DESC, g.id ASC
+      ORDER BY total_score DESC, g.name ASC
     ''');
   }
 
@@ -432,7 +465,7 @@ class DatabaseHelper {
       LEFT JOIN session_turns st ON st.session_id = s.id AND st.player_name = p.name
       WHERE p.group_id = ?
       GROUP BY p.id, p.group_id, p.name, p.avatar, p.penalty
-      ORDER BY score DESC
+      ORDER BY score DESC, p.penalty ASC, p.name ASC
     ''', [groupId]);
     return result.map((json) => Player.fromMap(json)).toList();
   }
@@ -494,7 +527,7 @@ class DatabaseHelper {
     final db = await instance.database;
     return await db.query(
       'global_players',
-      orderBy: 'total_score DESC, total_penalty ASC',
+      orderBy: 'total_score DESC, total_penalty ASC, name ASC',
     );
   }
 

@@ -2,16 +2,36 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/truth_or_dare_provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../services/audio_service.dart';
 import 'penalty_screen.dart';
 
 /// Shown briefly when a player taps "Skip". Then goes to PenaltyScreen.
 /// SkipScreen does NOT record points — PenaltyScreen's initState does that.
-class SkipScreen extends StatelessWidget {
+class SkipScreen extends StatefulWidget {
   const SkipScreen({super.key});
+
+  @override
+  State<SkipScreen> createState() => _SkipScreenState();
+}
+
+class _SkipScreenState extends State<SkipScreen> {
+  // Lưu lại type trước khi build để tránh null sau khi recordSkip
+  String? _contentTypeSaved;
+
+  @override
+  void initState() {
+    super.initState();
+    // Phát âm thanh thất bại khi skip
+    AudioService.instance.playSFX('tap.mp3');
+    // Lưu type ngay lập tức trước khi recordSkip() xóa currentContent
+    final todProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
+    _contentTypeSaved = todProvider.currentContent?.type;
+  }
 
   @override
   Widget build(BuildContext context) {
     final todProvider = Provider.of<TruthOrDareProvider>(context);
+    final isTruth = _contentTypeSaved == 'truth';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -33,9 +53,9 @@ class SkipScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
-            const Text(
-              'Bỏ qua thử thách!',
-              style: TextStyle(
+            Text(
+              isTruth ? 'Không dám trả lời!' : 'Bỏ qua thử thách!',
+              style: const TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.w900,
                 color: AppColors.textPrimary,
@@ -89,3 +109,4 @@ class SkipScreen extends StatelessWidget {
     );
   }
 }
+

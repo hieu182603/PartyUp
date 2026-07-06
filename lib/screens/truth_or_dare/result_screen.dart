@@ -116,9 +116,9 @@ class ResultScreen extends StatelessWidget {
                   const SizedBox(height: 20),
 
                   // Scoreboard
-                  const Text(
-                    'Bảng điểm',
-                    style: TextStyle(
+                  Text(
+                    isGameOver ? 'Điểm cuối cùng' : 'Tổng điểm tích lũy',
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w900,
                       color: AppColors.textPrimary,
@@ -269,9 +269,8 @@ class ResultScreen extends StatelessWidget {
                   // Back home
                   TextButton(
                     onPressed: () {
-                      if (isGameOver) {
-                        todProvider.reset();
-                      }
+                      // Luôn reset state khi về trang chủ, dù game chưa kết thúc
+                      todProvider.reset();
                       Navigator.pushAndRemoveUntil(
                         context,
                         MaterialPageRoute(builder: (_) => const HomeScreen()),

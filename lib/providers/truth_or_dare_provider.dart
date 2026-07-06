@@ -20,6 +20,7 @@ class TruthOrDareProvider with ChangeNotifier {
   int? currentSessionId;
   List<String> currentCategories = ['Tổng hợp'];
   String? currentDifficulty;
+  bool favoritesOnly = false;
 
   // ─── Game configuration ───────────────────────────────────────────────────
   int totalRounds = 5;
@@ -29,8 +30,10 @@ class TruthOrDareProvider with ChangeNotifier {
   int penaltyPoints = -10;
 
   // ─── Round tracking ───────────────────────────────────────────────────────
-  // IDs of players who have already played in the CURRENT round
   final Set<int> _playedThisRound = {};
+  
+  // Lịch sử người chơi đã đổi câu hỏi trong toàn bộ ván
+  final Set<int> _hasRerolled = {};
 
   // Round-level stats (reset each round)
   int correctCount = 0;
@@ -69,12 +72,15 @@ class TruthOrDareProvider with ChangeNotifier {
     required int penalty,
     List<String>? categories,
     String? difficulty,
+    bool favoritesOnly = false,
   }) {
     totalRounds = rounds;
     timeLimit = time;
     rewardPoints = reward;
     penaltyPoints = penalty;
     currentDifficulty = difficulty;
+    this.favoritesOnly = favoritesOnly;
+    _hasRerolled.clear();
     if (categories != null && categories.isNotEmpty) {
       currentCategories = categories;
     }
@@ -132,6 +138,15 @@ class TruthOrDareProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  bool canReroll(int playerId) {
+    return !_hasRerolled.contains(playerId);
+  }
+
+  void useReroll(int playerId) {
+    _hasRerolled.add(playerId);
+    notifyListeners();
+  }
+
   void recordSkip(int points) {
     if (_currentPlayer?.id != null) {
       _playedThisRound.add(_currentPlayer!.id!);
@@ -164,6 +179,7 @@ class TruthOrDareProvider with ChangeNotifier {
   void nextRound() {
     currentRound++;
     _playedThisRound.clear();
+    _hasRerolled.clear(); // Đặt lại quyền đổi câu cho mỗi vòng mới
     correctCount = 0;
     skipCount = 0;
     pointsGainedThisRound = 0;

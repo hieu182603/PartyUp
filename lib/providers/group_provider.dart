@@ -43,6 +43,11 @@ class GroupProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  void clearCurrentGroup() {
+    _currentGroup = null;
+    notifyListeners();
+  }
+
   Future<void> deleteGroup(int id) async {
     await DatabaseHelper.instance.deleteGroup(id);
     _groups.removeWhere((g) => g.id == id);

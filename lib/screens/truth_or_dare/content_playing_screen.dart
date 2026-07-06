@@ -7,6 +7,8 @@ import '../../providers/game_content_provider.dart';
 import '../../models/game_content.dart';
 import '../../services/audio_service.dart';
 import '../../core/theme/app_colors.dart';
+import 'package:flutter/services.dart';
+import '../../core/app_notification.dart';
 import 'success_screen.dart';
 import 'skip_screen.dart';
 import 'truth_or_dare_choice_screen.dart';
@@ -22,6 +24,8 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
   int _timeLeft = 30;
   Timer? _timer;
 
+  bool _isLocked = false;
+
   @override
   void initState() {
     super.initState();
@@ -36,9 +40,26 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
         setState(() {
           _timeLeft--;
         });
+        if (_timeLeft <= 5 && _timeLeft > 0) {
+          HapticFeedback.lightImpact(); // Giảm nhẹ độ rung để tránh loa bị rè
+          AudioService.instance.playSFX('tick.mp3');
+        }
       } else {
         _timer?.cancel();
-        _onSkip(); // Time out is treated as skip
+        _onTimeout();
+      }
+    });
+  }
+
+  void _onTimeout() {
+    if (_isLocked) return;
+    setState(() => _isLocked = true);
+    AudioService.instance.playSFX('siren.mp3');
+    
+    // Đợi 2s để nghe tiếng còi hú rồi tự chuyển lượt
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        _onSkip();
       }
     });
   }
@@ -50,6 +71,7 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
   }
 
   void _onAnswer() {
+    if (_isLocked) return;
     _timer?.cancel();
     Navigator.pushReplacement(
       context,
@@ -58,6 +80,10 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
   }
 
   void _onSkip() {
+    // Chặn nếu đang bị khóa do timeout đang xử lý (chưa hết 2s delay)
+    if (_isLocked && _timeLeft > 0) return;
+    if (_isLocked && _timeLeft == 0) { /* timeout path: cho phép */ }
+    setState(() => _isLocked = true);
     _timer?.cancel();
     Navigator.pushReplacement(
       context,
@@ -65,13 +91,47 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
     );
   }
 
-  String _getCategory(String type, String level) {
-    if (type == 'truth') {
-      return level == 'hardcore' ? 'Secret' : 'Lifestyle';
-    } else if (type == 'dare') {
-      return level == 'hardcore' ? 'Extreme' : 'Funny';
+  void _onReroll() async {
+    if (_isLocked) return;
+    final todProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
+    final contentProvider = Provider.of<GameContentProvider>(context, listen: false);
+    final player = todProvider.currentPlayer;
+    if (player == null || !todProvider.canReroll(player.id!)) return;
+
+    final type = todProvider.currentContent?.type ?? 'truth';
+    final content = await contentProvider.getRandomContent(
+      type,
+      categories: todProvider.currentCategories,
+      difficulty: todProvider.currentDifficulty,
+      favoritesOnly: todProvider.favoritesOnly,
+    );
+
+    if (!mounted) return;
+
+    if (content != null) {
+      todProvider.useReroll(player.id!);
+      todProvider.chooseType(content);
+      // Fix: Hủy timer cũ và khởi động lại timer mới
+      _timer?.cancel();
+      setState(() {
+        _timeLeft = todProvider.timeLimit;
+      });
+      _startTimer();
+      AudioService.instance.playSFX('tap.mp3');
+    } else {
+      AppNotification.error(context, 'Kho câu hỏi đã cạn, không thể đổi câu khác!');
     }
-    return 'General';
+  }
+
+  // Hiển thị category thực tế từ database
+  String _getCategoryDisplay(GameContent content) {
+    if (content.category.isNotEmpty && content.category != 'Tổng hợp') {
+      return content.category;
+    }
+    // Fallback dựa theo loại
+    if (content.type == 'truth') return 'Sự thật';
+    if (content.type == 'dare') return 'Thử thách';
+    return 'Tổng hợp';
   }
 
   @override
@@ -163,8 +223,19 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
                           },
                         ),
                         IconButton(
-                          icon: const Icon(Icons.volume_up_rounded, size: 28, color: AppColors.textPrimary),
-                          onPressed: () {},
+                          icon: Icon(
+                            AudioService.instance.isSoundEnabled
+                                ? Icons.volume_up_rounded
+                                : Icons.volume_off_rounded,
+                            size: 28,
+                            color: AppColors.textPrimary,
+                          ),
+                          onPressed: () {
+                            AudioService.instance.setSoundEnabled(
+                              !AudioService.instance.isSoundEnabled,
+                            );
+                            setState(() {});
+                          },
                         ),
                       ],
                     ),
@@ -240,20 +311,22 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    // Timer Pill
+                    // Timer Pill / Progress Bar
                     Center(
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: _timeLeft <= 5 ? const Color(0xFFFF4B72) : Colors.white,
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
-                            color: isTruth ? const Color(0xFFFFCCD3) : const Color(0xFFC0D9FF),
+                            color: _timeLeft <= 5 
+                                ? Colors.transparent
+                                : (isTruth ? const Color(0xFFFFCCD3) : const Color(0xFFC0D9FF)),
                             width: 1.5,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.02),
+                              color: _timeLeft <= 5 ? const Color(0xFFFF4B72).withOpacity(0.4) : Colors.black.withOpacity(0.02),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),
@@ -264,7 +337,7 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
                           children: [
                             Icon(
                               Icons.access_time_filled_rounded,
-                              color: isTruth ? const Color(0xFFFF4B72) : const Color(0xFF368DFF),
+                              color: _timeLeft <= 5 ? Colors.white : (isTruth ? const Color(0xFFFF4B72) : const Color(0xFF368DFF)),
                               size: 20,
                             ),
                             const SizedBox(width: 8),
@@ -273,11 +346,24 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w900,
-                                color: isTruth ? const Color(0xFFFF4B72) : const Color(0xFF368DFF),
+                                color: _timeLeft <= 5 ? Colors.white : (isTruth ? const Color(0xFFFF4B72) : const Color(0xFF368DFF)),
                               ),
                             ),
                           ],
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // ProgressBar 
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: _timeLeft / todProvider.timeLimit,
+                        backgroundColor: Colors.white.withOpacity(0.5),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          _timeLeft <= 5 ? const Color(0xFFFF4B72) : primaryColor,
+                        ),
+                        minHeight: 6,
                       ),
                     ),
                     const Spacer(flex: 2),
@@ -382,7 +468,7 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
-                                  'Chủ đề: ${_getCategory(content.type, content.level)}',
+                                  'Chủ đề: ${_getCategoryDisplay(content)}',
                                   style: const TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w800,
@@ -440,12 +526,12 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
                                     ],
                                   ),
                                   const SizedBox(height: 4),
-                                  const Text(
-                                    'Trả lời',
+                                  Text(
+                                    'Hoàn thành',
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w900,
-                                      color: Colors.white,
+                                      color: _isLocked ? Colors.white.withOpacity(0.5) : Colors.white,
                                     ),
                                   ),
                                 ],
@@ -494,11 +580,11 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Bỏ qua',
+                                    'Bỏ cuộc',
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w900,
-                                      color: primaryColor,
+                                      color: _isLocked ? primaryColor.withOpacity(0.5) : primaryColor,
                                     ),
                                   ),
                                 ],
@@ -508,7 +594,26 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 20),
+                    // Re-roll button
+                    if (todProvider.currentPlayer != null && todProvider.canReroll(todProvider.currentPlayer!.id!))
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16.0),
+                        child: Center(
+                          child: TextButton.icon(
+                            onPressed: _onReroll,
+                            icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
+                            label: const Text(
+                              'Đổi câu khác (còn 1 lần)',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 12),
                   ],
                 ),
               ),

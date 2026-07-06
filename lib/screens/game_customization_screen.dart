@@ -19,16 +19,13 @@ class GameCustomizationScreen extends StatefulWidget {
 }
 
 class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
-  int _timeLimitIndex = 1; // 0: 15s, 1: 20s, 2: 30s, 3: 45s
-  int _rewardPointsIndex = 1; // 0: +10, 1: +20, 2: +30
-  int _penaltyPointsIndex = 1; // 0: -5, 1: -10, 2: -15
-  int _roundsIndex = 1; // 0: 3 vòng, 1: 5 vòng, 2: 7 vòng, 3: 10 vòng
+  int _selectedTimeLimit = 30; // 5 - 120 (step 5)
+  int _selectedRewardPoints = 20; // 5 - 50 (step 5)
+  int _selectedPenaltyPoints = -10; // -50 - -5 (step 5)
+  int _selectedRounds = 5; // 1 - 20 (step 1)
   int _difficultyIndex = 0; // 0: Tất cả, 1: Dễ, 2: Vừa, 3: Khó, 4: Kịch tính
+  bool _favoritesOnly = false;
 
-  final List<int> _timeLimits = [15, 20, 30, 45];
-  final List<int> _rewardPoints = [10, 20, 30];
-  final List<int> _penaltyPoints = [-15, -10, -5];
-  final List<int> _rounds = [3, 5, 7, 10];
   List<String> _difficultyLabels = ['Tất cả'];
   List<String?> _difficultyValues = [null];
   final TextEditingController _teamNameController = TextEditingController();
@@ -77,8 +74,16 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
       return indexA.compareTo(indexB);
     });
 
+    final Map<String, String> labelMap = {
+      'easy': 'Nhẹ nhàng',
+      'medium': 'Vui',
+      'hard': 'Lầy',
+      'extreme': 'Kịch tính',
+      '18+': '18+',
+    };
+
     setState(() {
-      _difficultyLabels = ['Tất cả', ...uniqueLevels];
+      _difficultyLabels = ['Tất cả', ...uniqueLevels.map((l) => labelMap[l] ?? l)];
       _difficultyValues = [null, ...uniqueLevels];
       _difficultyIndex = 0;
     });
@@ -104,12 +109,13 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
 
       // Save configuration in provider
       todProvider.configureGame(
-        rounds: _rounds[_roundsIndex],
-        time: _timeLimits[_timeLimitIndex],
-        reward: _rewardPoints[_rewardPointsIndex],
-        penalty: _penaltyPoints[_penaltyPointsIndex],
+        rounds: _selectedRounds,
+        time: _selectedTimeLimit,
+        reward: _selectedRewardPoints,
+        penalty: _selectedPenaltyPoints,
         categories: widget.categories,
         difficulty: _difficultyValues[_difficultyIndex],
+        favoritesOnly: _favoritesOnly,
       );
 
       // Initialize or update group
@@ -138,10 +144,10 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final activeTime = _timeLimits[_timeLimitIndex];
-    final activeReward = _rewardPoints[_rewardPointsIndex];
-    final activePenalty = _penaltyPoints[_penaltyPointsIndex];
-    final activeRounds = _rounds[_roundsIndex];
+    final activeTime = _selectedTimeLimit;
+    final activeReward = _selectedRewardPoints;
+    final activePenalty = _selectedPenaltyPoints;
+    final activeRounds = _selectedRounds;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -175,9 +181,10 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
             Expanded(
               child: ListView(
                 physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.only(bottom: 24),
                 children: [
                   const Text(
-                    'Cài đặt chung',
+                    'Thông tin phòng',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w900,
@@ -236,7 +243,16 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Cài đặt chung',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   _buildCustomRow(
                     icon: Icons.access_time_filled_rounded,
                     iconColor: const Color(0xFFFF5B7F),
@@ -246,14 +262,14 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                       children: [
                         IconButton(
                           onPressed: () {
-                            if (_timeLimitIndex > 0) {
+                            if (_selectedTimeLimit > 5) {
                               setState(() {
-                                _timeLimitIndex--;
+                                _selectedTimeLimit -= 5;
                               });
                             } else {
                               AppNotification.warning(
                                 context,
-                                'Thời gian tối thiểu là ${_timeLimits.first} giây!',
+                                'Thời gian tối thiểu là 5 giây!',
                               );
                             }
                           },
@@ -272,14 +288,14 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                         ),
                         IconButton(
                           onPressed: () {
-                            if (_timeLimitIndex < _timeLimits.length - 1) {
+                            if (_selectedTimeLimit < 120) {
                               setState(() {
-                                _timeLimitIndex++;
+                                _selectedTimeLimit += 5;
                               });
                             } else {
                               AppNotification.warning(
                                 context,
-                                'Thời gian tối đa là ${_timeLimits.last} giây!',
+                                'Thời gian tối đa là 120 giây!',
                               );
                             }
                           },
@@ -302,14 +318,14 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                       children: [
                         IconButton(
                           onPressed: () {
-                            if (_rewardPointsIndex > 0) {
+                            if (_selectedRewardPoints > 5) {
                               setState(() {
-                                _rewardPointsIndex--;
+                                _selectedRewardPoints -= 5;
                               });
                             } else {
                               AppNotification.warning(
                                 context,
-                                'Điểm cộng tối thiểu là +${_rewardPoints.first}!',
+                                'Điểm cộng tối thiểu là +5!',
                               );
                             }
                           },
@@ -328,14 +344,14 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                         ),
                         IconButton(
                           onPressed: () {
-                            if (_rewardPointsIndex < _rewardPoints.length - 1) {
+                            if (_selectedRewardPoints < 50) {
                               setState(() {
-                                _rewardPointsIndex++;
+                                _selectedRewardPoints += 5;
                               });
                             } else {
                               AppNotification.warning(
                                 context,
-                                'Điểm cộng tối đa là +${_rewardPoints.last}!',
+                                'Điểm cộng tối đa là +50!',
                               );
                             }
                           },
@@ -345,6 +361,26 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                           ),
                         ),
                       ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Favorites only setting
+                  _buildCustomRow(
+                    icon: Icons.favorite_rounded,
+                    iconColor: const Color(0xFFFF5B7F),
+                    title: 'Chỉ chơi câu Yêu thích',
+                    trailing: Switch(
+                      value: _favoritesOnly,
+                      activeTrackColor: const Color(0xFFFF5B7F),
+                      activeThumbColor: Colors.white,
+                      inactiveTrackColor: const Color(0xFFE8EBF3),
+                      inactiveThumbColor: const Color(0xFF9E9E9E),
+                      trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
+                      onChanged: (val) {
+                        setState(() {
+                          _favoritesOnly = val;
+                        });
+                      },
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -358,14 +394,14 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                       children: [
                         IconButton(
                           onPressed: () {
-                            if (_penaltyPointsIndex > 0) {
+                            if (_selectedPenaltyPoints > -50) {
                               setState(() {
-                                _penaltyPointsIndex--;
+                                _selectedPenaltyPoints -= 5;
                               });
                             } else {
                               AppNotification.warning(
                                 context,
-                                'Điểm phạt tối đa là ${_penaltyPoints.first}!',
+                                'Điểm phạt tối đa là -50!',
                               );
                             }
                           },
@@ -384,15 +420,14 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                         ),
                         IconButton(
                           onPressed: () {
-                            if (_penaltyPointsIndex <
-                                _penaltyPoints.length - 1) {
+                            if (_selectedPenaltyPoints < -5) {
                               setState(() {
-                                _penaltyPointsIndex++;
+                                _selectedPenaltyPoints += 5;
                               });
                             } else {
                               AppNotification.warning(
                                 context,
-                                'Điểm phạt tối thiểu là ${_penaltyPoints.last}!',
+                                'Điểm phạt tối thiểu là -5!',
                               );
                             }
                           },
@@ -415,14 +450,14 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                       children: [
                         IconButton(
                           onPressed: () {
-                            if (_roundsIndex > 0) {
+                            if (_selectedRounds > 1) {
                               setState(() {
-                                _roundsIndex--;
+                                _selectedRounds -= 1;
                               });
                             } else {
                               AppNotification.warning(
                                 context,
-                                'Số vòng chơi tối thiểu là ${_rounds.first}!',
+                                'Số vòng chơi tối thiểu là 1!',
                               );
                             }
                           },
@@ -441,14 +476,14 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                         ),
                         IconButton(
                           onPressed: () {
-                            if (_roundsIndex < _rounds.length - 1) {
+                            if (_selectedRounds < 20) {
                               setState(() {
-                                _roundsIndex++;
+                                _selectedRounds += 1;
                               });
                             } else {
                               AppNotification.warning(
                                 context,
-                                'Số vòng chơi tối đa là ${_rounds.last}!',
+                                'Số vòng chơi tối đa là 20!',
                               );
                             }
                           },
@@ -475,16 +510,12 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                               setState(() {
                                 _difficultyIndex--;
                               });
-                            } else {
-                              AppNotification.warning(
-                                context,
-                                'Mức độ thấp nhất là ${_difficultyLabels.first}!',
-                              );
                             }
                           },
-                          icon: const Icon(
-                            Icons.remove_circle_outline_rounded,
-                            color: AppColors.textSecondary,
+                          icon: Icon(
+                            Icons.navigate_before_rounded,
+                            color: _difficultyIndex > 0 ? AppColors.textSecondary : Colors.transparent,
+                            size: 28,
                           ),
                         ),
                         Text(
@@ -502,16 +533,12 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                               setState(() {
                                 _difficultyIndex++;
                               });
-                            } else {
-                              AppNotification.warning(
-                                context,
-                                'Mức độ cao nhất là ${_difficultyLabels.last}!',
-                              );
                             }
                           },
-                          icon: const Icon(
-                            Icons.add_circle_outline_rounded,
-                            color: AppColors.textSecondary,
+                          icon: Icon(
+                            Icons.navigate_next_rounded,
+                            color: _difficultyIndex < _difficultyLabels.length - 1 ? AppColors.textSecondary : Colors.transparent,
+                            size: 28,
                           ),
                         ),
                       ],
