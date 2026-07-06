@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/truth_or_dare_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../services/audio_service.dart';
 import 'result_screen.dart';
 import 'random_player_screen.dart';
 
@@ -18,6 +19,7 @@ class _PenaltyScreenState extends State<PenaltyScreen> {
   @override
   void initState() {
     super.initState();
+    AudioService.instance.playSFX('siren.mp3');
     _recordPenalty();
   }
 
@@ -30,6 +32,8 @@ class _PenaltyScreenState extends State<PenaltyScreen> {
       final points = todProvider.penaltyPoints; // negative value
       // Apply penalty to player score
       await playerProvider.updatePlayerScore(player.id!, points);
+      // Track penalty count in player profile
+      await playerProvider.updatePlayerPenalty(player.id!, points.abs());
       // Mark player as played + update round stats
       todProvider.recordSkip(points);
     }
@@ -53,6 +57,9 @@ class _PenaltyScreenState extends State<PenaltyScreen> {
   @override
   Widget build(BuildContext context) {
     final todProvider = Provider.of<TruthOrDareProvider>(context);
+    // Lưu content type trước khi recordSkip() xóa currentContent
+    // (PenaltyScreen được xây dựng sau khi recordSkip đã chạy trong initState)
+    // Cần penaltyText trước khi content bị null
     final penaltyText = todProvider.currentContent?.penaltyText ??
         'Hát một bài hát bất kỳ hoặc nhảy trong 30 giây';
 
@@ -76,8 +83,9 @@ class _PenaltyScreenState extends State<PenaltyScreen> {
             ),
             const SizedBox(height: 24),
 
+            // Tiêu đề cố định vì currentContent đã bị xóa trong recordSkip()
             const Text(
-              'Bỏ qua!',
+              'Chịu phạt thôi!',
               style: TextStyle(
                 fontSize: 34,
                 fontWeight: FontWeight.w900,

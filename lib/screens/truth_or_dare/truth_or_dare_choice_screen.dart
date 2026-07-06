@@ -5,6 +5,7 @@ import '../../providers/game_content_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/app_notification.dart';
 import '../../services/audio_service.dart';
+import 'package:random_avatar/random_avatar.dart';
 import 'content_playing_screen.dart';
 import 'random_player_screen.dart';
 
@@ -20,8 +21,17 @@ class TruthOrDareChoiceScreen extends StatelessWidget {
 
     final categories = todProvider.currentCategories;
     final difficulty = todProvider.currentDifficulty;
-    final content = await contentProvider.getRandomContent(type, categories: categories, difficulty: difficulty);
+    final favoritesOnly = todProvider.favoritesOnly;
+    var content = await contentProvider.getRandomContent(type, categories: categories, difficulty: difficulty, favoritesOnly: favoritesOnly);
     if (!context.mounted) return;
+
+    if (content == null) {
+      contentProvider.resetUsedContents();
+      AppNotification.success(context, 'Các bạn chơi quá đỉnh, kho bài đã cạn! Hệ thống đang xáo lại bộ bài để cuộc vui tiếp tục nhé!');
+      
+      content = await contentProvider.getRandomContent(type, categories: categories, difficulty: difficulty, favoritesOnly: favoritesOnly);
+      if (!context.mounted) return;
+    }
 
     if (content != null) {
       todProvider.chooseType(content);
@@ -30,7 +40,7 @@ class TruthOrDareChoiceScreen extends StatelessWidget {
         MaterialPageRoute(builder: (_) => const ContentPlayingScreen()),
       );
     } else {
-      AppNotification.error(context, 'Không còn câu hỏi/thử thách loại này! Hãy đổi lượt.');
+      AppNotification.error(context, 'Không tìm thấy câu hỏi/thử thách phù hợp! Hãy thử đổi cài đặt mức độ hoặc thể loại.');
     }
   }
 
@@ -48,10 +58,11 @@ class TruthOrDareChoiceScreen extends StatelessWidget {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const RandomPlayerScreen()),
-          ),
+          onPressed: () {
+            // Không chọn lại người chơi mới khi bấm back
+            // Chỉ hiển thị lại RandomPlayerScreen cho phép bấm cóng đồng
+            Navigator.pop(context);
+          },
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -61,38 +72,58 @@ class TruthOrDareChoiceScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: 10),
-            // Header text
+            // Header text with Avatar
             Center(
-              child: Text(
-                '${player.name} ơi, chọn đi!',
-                style: const TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.textPrimary,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4)),
+                  ],
                 ),
-                textAlign: TextAlign.center,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(40),
+                  child: RandomAvatar(player.name, trBackground: false, height: 80, width: 80),
+                ),
               ),
             ),
-            const SizedBox(height: 6),
-            const Center(
-              child: Text(
-                'Truth hay Dare?',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textSecondary,
-                ),
-                textAlign: TextAlign.center,
+            const SizedBox(height: 16),
+            Center(
+              child: Column(
+                children: [
+                  Text(
+                    '${player.name}',
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.textPrimary,
+                      height: 1.3,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Chọn đi nào! Sự thật hay Thử thách?',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                      height: 1.3,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 24),
             // TRUTH Card (Red/Pink)
             Expanded(
               child: _buildChoiceCard(
                 context,
-                title: 'TRUTH',
-                gradient: AppColors.truthGradient,
+                title: 'THẬT',
+                gradient: AppColors.truthGradient, // Đỏ (đúng màu Truth)
                 bubbleChild: const Text(
                   '?',
                   style: TextStyle(
@@ -109,8 +140,8 @@ class TruthOrDareChoiceScreen extends StatelessWidget {
             Expanded(
               child: _buildChoiceCard(
                 context,
-                title: 'DARE',
-                gradient: AppColors.dareGradient,
+                title: 'THÁCH',
+                gradient: AppColors.dareGradient, // Xanh (dùng dare gradient cho THÁCH)
                 bubbleChild: const Icon(
                   Icons.bolt_rounded,
                   size: 36,
@@ -124,6 +155,7 @@ class TruthOrDareChoiceScreen extends StatelessWidget {
             Center(
               child: TextButton.icon(
                 onPressed: () {
+                  // Remove recordSkip to prevent skipping player
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(builder: (_) => const RandomPlayerScreen()),
@@ -162,7 +194,7 @@ class TruthOrDareChoiceScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(32),
           boxShadow: [
             BoxShadow(
-              color: gradient.colors.first.withOpacity(0.35),
+              color: gradient.colors.first.withValues(alpha: 0.35),
               blurRadius: 18,
               offset: const Offset(0, 10),
             ),

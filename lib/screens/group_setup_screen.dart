@@ -145,6 +145,106 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
     );
   }
 
+  void _showSelectGroupBottomSheet() async {
+    final groupProvider = Provider.of<GroupProvider>(context, listen: false);
+    await groupProvider.loadGroups();
+    
+    if (!mounted) return;
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Consumer<GroupProvider>(
+          builder: (context, provider, _) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(32),
+                  topRight: Radius.circular(32),
+                ),
+              ),
+              padding: const EdgeInsets.all(28.0),
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.7,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 50,
+                      height: 5,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFE8EBF3),
+                        borderRadius: BorderRadius.all(Radius.circular(10)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Chọn đội chơi cũ',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.textPrimary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  Expanded(
+                    child: provider.groups.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'Chưa có đội chơi nào',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                          )
+                        : ListView.builder(
+                            physics: const BouncingScrollPhysics(),
+                            itemCount: provider.groups.length,
+                            itemBuilder: (context, index) {
+                              final group = provider.groups[index];
+                              final isCurrent = group.id == provider.currentGroup?.id;
+                              
+                              return ListTile(
+                                leading: const CircleAvatar(
+                                  backgroundColor: Color(0xFFE8F9F3),
+                                  child: Icon(Icons.group_rounded, color: Color(0xFF3DD99F)),
+                                ),
+                                title: Text(
+                                  group.name,
+                                  style: TextStyle(
+                                    fontWeight: isCurrent ? FontWeight.w900 : FontWeight.w700,
+                                    color: isCurrent ? const Color(0xFF7C5CFF) : AppColors.textPrimary,
+                                  ),
+                                ),
+                                trailing: isCurrent 
+                                    ? const Icon(Icons.check_circle_rounded, color: Color(0xFF7C5CFF))
+                                    : null,
+                                onTap: () {
+                                  provider.setCurrentGroup(group);
+                                  _groupNameController.text = group.name;
+                                  Provider.of<PlayerProvider>(context, listen: false)
+                                      .loadPlayersForGroup(group.id!);
+                                  Navigator.pop(context);
+                                  AppNotification.success(context, 'Đã chọn đội: ${group.name}');
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _addPlayerAndClose() {
     final name = _playerNameController.text.trim();
     if (name.isEmpty) {
@@ -253,6 +353,13 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history_rounded, size: 24, color: AppColors.textPrimary),
+            onPressed: _showSelectGroupBottomSheet,
+            tooltip: 'Chọn đội cũ',
+          ),
+        ],
         centerTitle: true,
       ),
       body: groupProvider.currentGroup == null

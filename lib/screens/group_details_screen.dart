@@ -41,8 +41,14 @@ class GroupDetailsScreen extends StatelessWidget {
 
           final players = snapshot.data ?? [];
           
-          // Sort players by score descending
-          players.sort((a, b) => b.score.compareTo(a.score));
+          // Sort players by score descending, then penalty ascending, then name ascending
+          players.sort((a, b) {
+            int scoreComp = b.score.compareTo(a.score);
+            if (scoreComp != 0) return scoreComp;
+            int penaltyComp = a.penalty.compareTo(b.penalty);
+            if (penaltyComp != 0) return penaltyComp;
+            return a.name.compareTo(b.name);
+          });
 
           // Compute group total score from member scores
           final groupScore = players.fold<int>(0, (sum, p) => sum + p.score);

@@ -5,6 +5,7 @@ import 'package:random_avatar/random_avatar.dart';
 import '../../providers/player_provider.dart';
 import '../../providers/truth_or_dare_provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../services/audio_service.dart';
 import 'truth_or_dare_choice_screen.dart';
 import 'result_screen.dart';
 
@@ -60,17 +61,22 @@ class _RandomPlayerScreenState extends State<RandomPlayerScreen>
   }
 
   void _startCountdownSequence() async {
-    await Future.delayed(const Duration(milliseconds: 700));
+    // Rút ngắn thời gian đếm ngược (hiệu ứng xoay nhanh)
+    await Future.delayed(const Duration(milliseconds: 300));
     if (mounted) setState(() => _activeCountdown = 2);
 
-    await Future.delayed(const Duration(milliseconds: 700));
+    await Future.delayed(const Duration(milliseconds: 300));
     if (mounted) setState(() => _activeCountdown = 1);
 
-    await Future.delayed(const Duration(milliseconds: 700));
+    await Future.delayed(const Duration(milliseconds: 300));
     if (mounted) {
       setState(() => _activeCountdown = 0);
+      
+      // Phát âm thanh chúc mừng
+      AudioService.instance.playSFX('ting.mp3');
 
-      Future.delayed(const Duration(milliseconds: 1000), () {
+      // Chờ 1.5s rồi tự động chuyển trang
+      Future.delayed(const Duration(milliseconds: 1500), () {
         if (mounted) {
           Navigator.pushReplacement(
             context,
@@ -105,9 +111,20 @@ class _RandomPlayerScreenState extends State<RandomPlayerScreen>
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.volume_up_rounded,
-                size: 24, color: AppColors.textPrimary),
-            onPressed: () {},
+            icon: Icon(
+              AudioService.instance.isSoundEnabled
+                  ? Icons.volume_up_rounded
+                  : Icons.volume_off_rounded,
+              size: 24,
+              color: AppColors.textPrimary,
+            ),
+            onPressed: () {
+              setState(() {
+                AudioService.instance.setSoundEnabled(
+                  !AudioService.instance.isSoundEnabled,
+                );
+              });
+            },
           ),
         ],
       ),

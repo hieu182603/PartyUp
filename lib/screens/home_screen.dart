@@ -31,9 +31,11 @@ class _HomeScreenState extends State<HomeScreen> {
     if (modeName == 'truth_or_dare') {
       final todProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
       final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+      final groupProvider = Provider.of<GroupProvider>(context, listen: false);
       
       todProvider.reset();
       playerProvider.resetScores();
+      groupProvider.clearCurrentGroup();
 
       Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen()));
     } else {
@@ -63,25 +65,34 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
-        child: BottomNavigationBar(
-          currentIndex: _currentTabIndex,
-          selectedItemColor: const Color(0xFF7C5CFF),
-          unselectedItemColor: AppColors.textSecondary,
-          showUnselectedLabels: true,
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          elevation: 0,
-          onTap: (index) {
-            setState(() {
-              _currentTabIndex = index;
-            });
-          },
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Trang chủ'),
-            BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Lịch sử'),
-            BottomNavigationBarItem(icon: Icon(Icons.emoji_events_outlined), label: 'Bảng xếp hạng'),
-            BottomNavigationBarItem(icon: Icon(Icons.settings_outlined), label: 'Cài đặt'),
-          ],
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: BottomNavigationBar(
+              currentIndex: _currentTabIndex,
+              selectedItemColor: const Color(0xFF7C5CFF),
+              unselectedItemColor: AppColors.textSecondary,
+              showSelectedLabels: true,
+              showUnselectedLabels: true,
+              selectedFontSize: 12.0,
+              unselectedFontSize: 12.0,
+              type: BottomNavigationBarType.fixed,
+              backgroundColor: Colors.white,
+              elevation: 0,
+              onTap: (index) {
+                setState(() {
+                  _currentTabIndex = index;
+                });
+              },
+              items: const [
+                BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Trang chủ'),
+                BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Lịch sử'),
+                BottomNavigationBarItem(icon: Icon(Icons.emoji_events_outlined), label: 'Bảng xếp hạng'),
+                BottomNavigationBarItem(icon: Icon(Icons.settings_outlined), label: 'Cài đặt'),
+              ],
+            ),
+          ),
         ),
       ),
     );

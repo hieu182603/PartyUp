@@ -470,24 +470,33 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           ),
         ],
       ),
-      child: BottomNavigationBar(
-        currentIndex: _bottomTabIndex,
-        selectedItemColor: const Color(0xFF7C5CFF),
-        unselectedItemColor: AppColors.textSecondary,
-        showUnselectedLabels: true,
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        onTap: (index) {
-          setState(() {
-            _bottomTabIndex = index;
-          });
-        },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.grid_view_rounded), label: 'Chủ đề'),
-          BottomNavigationBarItem(icon: Icon(Icons.library_books_rounded), label: 'Bộ câu hỏi'),
-          BottomNavigationBarItem(icon: Icon(Icons.favorite_rounded), label: 'Yêu thích'),
-        ],
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 8.0),
+          child: BottomNavigationBar(
+            currentIndex: _bottomTabIndex,
+            selectedItemColor: const Color(0xFF7C5CFF),
+            unselectedItemColor: AppColors.textSecondary,
+            showSelectedLabels: true,
+            showUnselectedLabels: true,
+            selectedFontSize: 12.0,
+            unselectedFontSize: 12.0,
+            type: BottomNavigationBarType.fixed,
+            backgroundColor: Colors.white,
+            elevation: 0,
+            onTap: (index) {
+              setState(() {
+                _bottomTabIndex = index;
+              });
+            },
+            items: const [
+              BottomNavigationBarItem(icon: Icon(Icons.grid_view_rounded), label: 'Chủ đề'),
+              BottomNavigationBarItem(icon: Icon(Icons.library_books_rounded), label: 'Bộ câu hỏi'),
+              BottomNavigationBarItem(icon: Icon(Icons.favorite_rounded), label: 'Yêu thích'),
+            ],
+          ),
+        ),
       ),
     );
   }

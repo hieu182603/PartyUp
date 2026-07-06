@@ -47,7 +47,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
           unselectedLabelColor: AppColors.textSecondary,
           indicatorColor: const Color(0xFF7C5CFF),
           indicatorWeight: 3,
-          labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+          labelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
           tabs: const [
             Tab(text: 'Toàn Cầu'),
             Tab(text: 'Các Nhóm'),
@@ -106,7 +107,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
           'avatarSeed': e['name'] as String,
         }).toList();
 
-        return _buildLeaderboardContent(mappedList, onItemTap: (item) {
+        return _buildLeaderboardContent(mappedList, isGroup: true, onItemTap: (item) {
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -131,7 +132,24 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
     );
   }
 
-  Widget _buildLeaderboardContent(List<Map<String, dynamic>> listData, {void Function(Map<String, dynamic>)? onItemTap}) {
+  Color _getGroupColor(String name) {
+    final colors = [
+      AppColors.primary,
+      AppColors.secondary,
+      AppColors.success,
+      AppColors.dareColor,
+      AppColors.warning,
+      const Color(0xFF8F5BFF),
+      const Color(0xFFFF8C4B),
+    ];
+    int hash = 0;
+    for (var i = 0; i < name.length; i++) {
+      hash += name.codeUnitAt(i);
+    }
+    return colors[hash % colors.length];
+  }
+
+  Widget _buildLeaderboardContent(List<Map<String, dynamic>> listData, {bool isGroup = false, void Function(Map<String, dynamic>)? onItemTap}) {
     Map<String, dynamic>? firstItem;
     Map<String, dynamic>? secondItem;
     Map<String, dynamic>? thirdItem;
@@ -146,7 +164,23 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
       thirdItem = listData[2];
     }
 
-    final remainingPlayers = listData.length > 3 ? listData.sublist(3) : [];
+    bool isGameStarted = true;
+    if (listData.isNotEmpty) {
+      bool allZeros = true;
+      for (var i = 0; i < (listData.length < 3 ? listData.length : 3); i++) {
+        if (listData[i]['score'] != 0) {
+          allZeros = false;
+          break;
+        }
+      }
+      if (allZeros) {
+        isGameStarted = false;
+      }
+    }
+
+    final List<Map<String, dynamic>> remainingPlayers = isGameStarted 
+        ? (listData.length > 3 ? listData.sublist(3) : [])
+        : listData;
 
     return Stack(
       children: [
@@ -157,50 +191,54 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
             children: [
               const SizedBox(height: 24),
               // Podiums (Hạng 1, 2, 3)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (secondItem != null)
-                    _buildPodiumColumn(
-                      name: secondItem['name'],
-                      score: secondItem['score'],
-                      rank: 2,
-                      height: 110,
-                      avatarSeed: secondItem['avatarSeed'],
-                      color: const Color(0xFFE8EBF3),
-                      onTap: onItemTap != null ? () => onItemTap(secondItem!) : null,
-                    )
-                  else
-                    const SizedBox(width: 80),
-                  const SizedBox(width: 16),
-                  if (firstItem != null)
-                    _buildPodiumColumn(
-                      name: firstItem['name'],
-                      score: firstItem['score'],
-                      rank: 1,
-                      height: 145,
-                      avatarSeed: firstItem['avatarSeed'],
-                      color: const Color(0xFFFFF7E6),
-                      hasCrown: true,
-                      onTap: onItemTap != null ? () => onItemTap(firstItem!) : null,
-                    ),
-                  const SizedBox(width: 16),
-                  if (thirdItem != null)
-                    _buildPodiumColumn(
-                      name: thirdItem['name'],
-                      score: thirdItem['score'],
-                      rank: 3,
-                      height: 95,
-                      avatarSeed: thirdItem['avatarSeed'],
-                      color: const Color(0xFFFFECEF),
-                      onTap: onItemTap != null ? () => onItemTap(thirdItem!) : null,
-                    )
-                  else
-                    const SizedBox(width: 80),
-                ],
-              ),
-              const SizedBox(height: 24),
+              if (isGameStarted)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (secondItem != null)
+                      _buildPodiumColumn(
+                        name: secondItem['name'],
+                        score: secondItem['score'],
+                        rank: 2,
+                        height: 120,
+                        avatarSeed: secondItem['avatarSeed'],
+                        color: const Color(0xFFE8EBF3),
+                        isGroup: isGroup,
+                        onTap: onItemTap != null ? () => onItemTap(secondItem!) : null,
+                      )
+                    else
+                      const SizedBox(width: 80),
+                    const SizedBox(width: 16),
+                    if (firstItem != null)
+                      _buildPodiumColumn(
+                        name: firstItem['name'],
+                        score: firstItem['score'],
+                        rank: 1,
+                        height: 160,
+                        avatarSeed: firstItem['avatarSeed'],
+                        color: const Color(0xFFFFF7E6),
+                        hasCrown: true,
+                        isGroup: isGroup,
+                        onTap: onItemTap != null ? () => onItemTap(firstItem!) : null,
+                      ),
+                    const SizedBox(width: 16),
+                    if (thirdItem != null)
+                      _buildPodiumColumn(
+                        name: thirdItem['name'],
+                        score: thirdItem['score'],
+                        rank: 3,
+                        height: 90,
+                        avatarSeed: thirdItem['avatarSeed'],
+                        color: const Color(0xFFFFECEF),
+                        isGroup: isGroup,
+                        onTap: onItemTap != null ? () => onItemTap(thirdItem!) : null,
+                      )
+                    else
+                      const SizedBox(width: 80),
+                  ],
+                ),
+              if (isGameStarted) const SizedBox(height: 24),
               // Rest of Leaderboard list
               Expanded(
                 child: ListView.builder(
@@ -209,7 +247,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                   itemCount: remainingPlayers.length,
                   itemBuilder: (context, index) {
                     final item = remainingPlayers[index];
-                    final rank = index + 4;
+                    final rank = isGameStarted ? (index + 4) : (index + 1);
 
                     return GestureDetector(
                       onTap: onItemTap != null ? () => onItemTap(item) : null,
@@ -234,21 +272,40 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                           ),
                           const SizedBox(width: 16),
                           // Avatar
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: Container(
-                              width: 36,
-                              height: 36,
-                              color: const Color(0xFFF2F4F7),
-                              child: RandomAvatar(
-                                item['avatarSeed'],
-                                trBackground: false,
-                                height: 36,
-                                width: 36,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
+                          isGroup
+                              ? Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: _getGroupColor(item['name']),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      item['name'].toString().isNotEmpty ? item['name'].toString()[0].toUpperCase() : 'G',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Container(
+                                    width: 36,
+                                    height: 36,
+                                    color: const Color(0xFFF2F4F7),
+                                    child: RandomAvatar(
+                                      item['avatarSeed'],
+                                      trBackground: false,
+                                      height: 36,
+                                      width: 36,
+                                    ),
+                                  ),
+                                ),
+                          const SizedBox(width: 20),
                           // Name
                           Expanded(
                             child: Text(
@@ -264,7 +321,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFFF7E6),
+                              color: const Color(0xFFF3F0FF),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
@@ -298,6 +355,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
     required String avatarSeed,
     required Color color,
     bool hasCrown = false,
+    bool isGroup = false,
     VoidCallback? onTap,
   }) {
     return Expanded(
@@ -328,14 +386,31 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                     ),
                   ],
                 ),
-                child: ClipOval(
-                  child: RandomAvatar(
-                    avatarSeed,
-                    trBackground: false,
-                    height: 64,
-                    width: 64,
-                  ),
-                ),
+                child: isGroup
+                    ? Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: _getGroupColor(name),
+                        ),
+                        child: Center(
+                          child: Text(
+                            name.isNotEmpty ? name[0].toUpperCase() : 'G',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      )
+                    : ClipOval(
+                        child: RandomAvatar(
+                          avatarSeed,
+                          trBackground: false,
+                          height: 64,
+                          width: 64,
+                        ),
+                      ),
               ),
               if (hasCrown)
                 const Positioned(
@@ -370,38 +445,61 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          // Name
-          Text(
-            name,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 4),
-          // Score
-          Text(
-            '$score pts',
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: AppColors.primary,
-            ),
-          ),
           const SizedBox(height: 12),
           // Podium Block
           Container(
             height: height,
+            width: double.infinity,
             decoration: BoxDecoration(
               color: color,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(16),
                 topRight: Radius.circular(16),
               ),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Faint Rank Number
+                Positioned(
+                  top: 8,
+                  child: Text(
+                    '$rank',
+                    style: TextStyle(
+                      fontSize: 80,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.black.withOpacity(0.04),
+                      height: 1.0,
+                    ),
+                  ),
+                ),
+                // Name and Score inside the block
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 12),
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$score điểm',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
           ],
