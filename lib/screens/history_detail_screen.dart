@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import '../core/theme/app_colors.dart';
 import '../services/database_helper.dart';
 
-class HistoryDetailScreen extends StatelessWidget {
+class HistoryDetailScreen extends StatefulWidget {
   final int sessionId;
   final Map<String, dynamic> sessionData;
 
@@ -15,9 +15,26 @@ class HistoryDetailScreen extends StatelessWidget {
   });
 
   @override
+  State<HistoryDetailScreen> createState() => _HistoryDetailScreenState();
+}
+
+class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
+  late Future<List<dynamic>> _dataFuture;
+  String? _selectedPlayerName;
+
+  @override
+  void initState() {
+    super.initState();
+    _dataFuture = Future.wait([
+      DatabaseHelper.instance.getSessionScores(widget.sessionId),
+      DatabaseHelper.instance.getSessionTurns(widget.sessionId),
+    ]);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final startedAt = DateTime.parse(sessionData['started_at']);
-    final endedAt = sessionData['ended_at'] != null ? DateTime.parse(sessionData['ended_at']) : null;
+    final startedAt = DateTime.parse(widget.sessionData['started_at']);
+    final endedAt = widget.sessionData['ended_at'] != null ? DateTime.parse(widget.sessionData['ended_at']) : null;
     final duration = endedAt != null ? endedAt.difference(startedAt) : Duration.zero;
 
     return Scaffold(
@@ -36,10 +53,7 @@ class HistoryDetailScreen extends StatelessWidget {
         ),
       ),
       body: FutureBuilder<List<dynamic>>(
-        future: Future.wait([
-          DatabaseHelper.instance.getSessionScores(sessionId),
-          DatabaseHelper.instance.getSessionTurns(sessionId),
-        ]),
+        future: _dataFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -50,6 +64,23 @@ class HistoryDetailScreen extends StatelessWidget {
 
           final scores = (snapshot.data?[0] as List?)?.cast<Map<String, dynamic>>() ?? [];
           final turns = (snapshot.data?[1] as List?)?.cast<Map<String, dynamic>>() ?? [];
+          final filteredTurns = _selectedPlayerName == null 
+              ? turns 
+              : turns.where((t) => t['player_name'] == _selectedPlayerName).toList();
+              
+          // Calculate ranks
+          List<int> ranks = [];
+          int currentRank = 1;
+          int? lastScore;
+          for (int i = 0; i < scores.length; i++) {
+            final score = scores[i]['score'];
+            if (lastScore == null || score < lastScore) {
+              currentRank = i + 1;
+              lastScore = score;
+            }
+            ranks.add(currentRank);
+          }
+
           if (scores.isEmpty) {
             return const Center(
               child: Text(
@@ -59,52 +90,91 @@ class HistoryDetailScreen extends StatelessWidget {
             );
           }
 
-          return ListView(
-            padding: const EdgeInsets.all(24),
+          return CustomScrollView(
             physics: const BouncingScrollPhysics(),
-            children: [
-              // General Info Card
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFE8EBF3), width: 1.5),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Thông tin chung', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.textPrimary)),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.only(top: 24, left: 24, right: 24, bottom: 16),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    // General Info Card
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFE8EBF3), width: 1.5),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Tổng quan', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.textPrimary)),
+                          const SizedBox(height: 16),
+                          _buildInfoRow(Icons.groups_rounded, 'Nhóm chơi', widget.sessionData['group_name'] ?? 'Không rõ'),
+                          _buildInfoRow(Icons.play_circle_outline_rounded, 'Thời gian bắt đầu', DateFormat('dd/MM/yyyy • HH:mm').format(startedAt)),
+                          if (endedAt != null)
+                            _buildInfoRow(Icons.check_circle_outline_rounded, 'Thời gian kết thúc', DateFormat('dd/MM/yyyy • HH:mm').format(endedAt)),
+                          if (endedAt != null)
+                            _buildInfoRow(Icons.timer_outlined, 'Tổng thời gian', '${duration.inMinutes} phút'),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const Text('Bảng xếp hạng ván chơi', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.textPrimary)),
                     const SizedBox(height: 16),
-                    _buildInfoRow('Nhóm chơi', sessionData['group_name'] ?? 'Không rõ'),
-                    _buildInfoRow('Thời gian bắt đầu', DateFormat('dd/MM/yyyy • HH:mm').format(startedAt)),
-                    if (endedAt != null)
-                      _buildInfoRow('Thời gian kết thúc', DateFormat('dd/MM/yyyy • HH:mm').format(endedAt)),
-                    if (endedAt != null)
-                      _buildInfoRow('Tổng thời gian', '${duration.inMinutes} phút'),
-                  ],
+                    if (scores.isEmpty)
+                      const Text('Chưa có dữ liệu xếp hạng', style: TextStyle(color: AppColors.textSecondary))
+                    else
+                      ...List.generate(scores.length, (index) {
+                        final player = scores[index];
+                        final rank = ranks[index];
+                        final isTie = ranks.where((r) => r == rank).length > 1;
+                        return _buildLeaderboardItem(player, rank, isTie);
+                      }),
+                      
+                    const SizedBox(height: 32),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Lịch sử theo lượt', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.textPrimary)),
+                        if (_selectedPlayerName != null)
+                          ActionChip(
+                            label: const Text('Tất cả', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF7C5CFF), fontSize: 12)),
+                            avatar: const Icon(Icons.close_rounded, size: 14, color: Color(0xFF7C5CFF)),
+                            backgroundColor: const Color(0xFFF0EDFF),
+                            side: BorderSide.none,
+                            padding: EdgeInsets.zero,
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => setState(() => _selectedPlayerName = null),
+                          ),
+                      ],
+                    ),
+                  ]),
                 ),
               ),
-              const SizedBox(height: 24),
-              const Text('Bảng xếp hạng ván chơi', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.textPrimary)),
-              const SizedBox(height: 16),
-              if (scores.isEmpty)
-                const Text('Chưa có dữ liệu xếp hạng', style: TextStyle(color: AppColors.textSecondary))
+              
+              if (filteredTurns.isEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
+                    child: Text(
+                      _selectedPlayerName == null ? 'Chưa có dữ liệu lượt chơi' : 'Người chơi này chưa có lượt nào', 
+                      style: const TextStyle(color: AppColors.textSecondary)
+                    ),
+                  ),
+                )
               else
-                ...List.generate(scores.length, (index) {
-                  final player = scores[index];
-                  return _buildLeaderboardItem(player, index + 1);
-                }),
-                
-              const SizedBox(height: 32),
-              const Text('Lịch sử theo lượt', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.textPrimary)),
-              const SizedBox(height: 16),
-              if (turns.isEmpty)
-                const Text('Chưa có dữ liệu lượt chơi', style: TextStyle(color: AppColors.textSecondary))
-              else
-                ...List.generate(turns.length, (index) {
-                  return _buildTurnItem(turns[index]);
-                }),
+                SliverPadding(
+                  padding: const EdgeInsets.only(left: 24, right: 24, bottom: 24),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        return _buildTurnItem(filteredTurns[index], index == filteredTurns.length - 1);
+                      },
+                      childCount: filteredTurns.length,
+                    ),
+                  ),
+                ),
             ],
           );
         },
@@ -112,126 +182,230 @@ class HistoryDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
+  Widget _buildInfoRow(IconData icon, String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+          Row(
+            children: [
+              Icon(icon, size: 16, color: AppColors.textSecondary),
+              const SizedBox(width: 8),
+              Text(label, style: const TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+            ],
+          ),
           Text(value, style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
         ],
       ),
     );
   }
 
-  Widget _buildLeaderboardItem(Map<String, dynamic> player, int rank) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: rank == 1 ? const Color(0xFFFFB300) : const Color(0xFFE8EBF3), width: rank == 1 ? 2 : 1),
-      ),
-      child: Row(
-        children: [
-          Text(
-            '#$rank',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              color: rank == 1 ? const Color(0xFFFFB300) : AppColors.textSecondary,
-            ),
+  Widget _buildLeaderboardItem(Map<String, dynamic> player, int rank, bool isTie) {
+    final String playerName = player['player_name'];
+    final bool isSelected = _selectedPlayerName == playerName;
+    final bool hasSelection = _selectedPlayerName != null;
+    final double opacity = hasSelection && !isSelected ? 0.4 : 1.0;
+
+    Color borderColor = const Color(0xFFE8EBF3);
+    Color backgroundColor = Colors.white;
+    Color rankColor = AppColors.textSecondary;
+    double borderWidth = 1.0;
+    Widget? trailingIcon;
+    double avatarSize = 40.0;
+    FontWeight textWeight = FontWeight.w800;
+
+    if (rank == 1) {
+      borderColor = const Color(0xFFFFB300);
+      backgroundColor = const Color(0xFFFFFDF5);
+      rankColor = const Color(0xFFFFB300);
+      borderWidth = 2.0;
+      trailingIcon = const Icon(Icons.emoji_events_rounded, color: Color(0xFFFFB300), size: 24);
+      avatarSize = 48.0;
+      textWeight = FontWeight.w900;
+    } else if (rank == 2) {
+      borderColor = const Color(0xFFFF9800);
+      backgroundColor = const Color(0xFFFFF8F0);
+      rankColor = const Color(0xFFFF9800);
+      borderWidth = 1.5;
+    } else if (rank == 3) {
+      borderColor = const Color(0xFF9C27B0);
+      backgroundColor = const Color(0xFFFDF5FF);
+      rankColor = const Color(0xFF9C27B0);
+      borderWidth = 1.5;
+    }
+
+    if (isSelected) {
+      backgroundColor = const Color(0xFFF0EDFF);
+      borderColor = const Color(0xFF7C5CFF);
+      borderWidth = 2.0;
+    }
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedPlayerName = isSelected ? null : playerName;
+        });
+      },
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 200),
+        opacity: opacity,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: rank == 1 ? 16 : 12),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: borderColor, width: borderWidth),
+            boxShadow: rank == 1 ? [
+              BoxShadow(color: const Color(0xFFFFB300).withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 4))
+            ] : null,
           ),
-          const SizedBox(width: 16),
-          RandomAvatar(player['player_name'], height: 40, width: 40),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              player['player_name'],
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
+          child: Row(
+            children: [
+              Text(
+                '#$rank',
+                style: TextStyle(
+                  fontSize: rank == 1 ? 20 : 16,
+                  fontWeight: FontWeight.w900,
+                  color: isSelected ? const Color(0xFF7C5CFF) : rankColor,
+                ),
               ),
-            ),
+              const SizedBox(width: 16),
+              Container(
+                decoration: rank <= 3 ? BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(color: rankColor.withOpacity(0.3), blurRadius: 8)
+                  ]
+                ) : null,
+                child: RandomAvatar(playerName, height: avatarSize, width: avatarSize)
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  playerName,
+                  style: TextStyle(
+                    fontSize: rank == 1 ? 18 : 16,
+                    fontWeight: textWeight,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              if (isTie && rank <= 3) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(color: rankColor.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                  child: Text('Hòa', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: rankColor)),
+                ),
+                const SizedBox(width: 8),
+              ],
+              if (trailingIcon != null) ...[
+                trailingIcon,
+                const SizedBox(width: 8),
+              ],
+              Text(
+                '${player['score']} điểm',
+                style: TextStyle(
+                  fontSize: rank == 1 ? 18 : 16,
+                  fontWeight: FontWeight.w900,
+                  color: isSelected ? const Color(0xFF7C5CFF) : rankColor,
+                ),
+              ),
+            ],
           ),
-          Text(
-            '${player['score']} điểm',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              color: rank == 1 ? const Color(0xFFFFB300) : AppColors.textPrimary,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildTurnItem(Map<String, dynamic> turn) {
+  Widget _buildTurnItem(Map<String, dynamic> turn, bool isLast) {
     final int pointsChange = turn['points_change'] ?? 0;
     final bool isPositive = pointsChange >= 0;
     final String contentStr = turn['content'] ?? '';
-    // Optional: Truncate content if too long
     final String shortContent = contentStr.length > 50 ? '${contentStr.substring(0, 50)}...' : contentStr;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE8EBF3), width: 1.5),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF2F4F7),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              'Vòng ${turn['round_number']}',
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: AppColors.textSecondary),
-            ),
+    return Stack(
+      children: [
+        if (!isLast)
+          Positioned(
+            left: 15,
+            top: 36,
+            bottom: 0,
+            child: Container(width: 2, color: const Color(0xFFE8EBF3)),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              margin: const EdgeInsets.only(right: 16, top: 4),
+              decoration: BoxDecoration(
+                color: isPositive ? const Color(0xFFE8F9F3) : const Color(0xFFFFECEF),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(isPositive ? Icons.check_rounded : Icons.close_rounded, size: 18, color: isPositive ? const Color(0xFF3DD99F) : const Color(0xFFFF4B72)),
+            ),
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 24),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE8EBF3), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2))
+                  ]
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        turn['player_name'] ?? 'Unknown',
-                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.textPrimary),
-                      ),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF2F4F7),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Vòng ${turn['round_number']}',
+                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 11, color: AppColors.textSecondary),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            turn['player_name'] ?? 'Unknown',
+                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.textPrimary),
+                          ),
+                        ),
+                        Text(
+                          isPositive ? '+$pointsChange đ' : '$pointsChange đ',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                            color: isPositive ? const Color(0xFF3DD99F) : const Color(0xFFFF4B72),
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      isPositive ? '+$pointsChange đ' : '$pointsChange đ',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 14,
-                        color: isPositive ? const Color(0xFF7C5CFF) : const Color(0xFFFF4B72),
+                    if (shortContent.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        shortContent,
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textSecondary),
                       ),
-                    ),
+                    ],
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  shortContent,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textSecondary),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
+      ],
     );
   }
 }

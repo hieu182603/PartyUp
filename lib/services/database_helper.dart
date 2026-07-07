@@ -369,7 +369,15 @@ class DatabaseHelper {
     if (sessionIds.isEmpty) return;
     final db = await instance.database;
 
+    Set<int> affectedGroupIds = {};
+
     for (final sessionId in sessionIds) {
+      // Find the group_id before deleting
+      final sessionData = await db.query('game_sessions', where: 'id = ?', whereArgs: [sessionId]);
+      if (sessionData.isNotEmpty) {
+        affectedGroupIds.add(sessionData.first['group_id'] as int);
+      }
+
       // Deduct points from global_players
       final List<Map<String, dynamic>> sessionTurns = await db.query(
           'session_turns',
@@ -411,6 +419,14 @@ class DatabaseHelper {
     // Clean up empty global players
     await db.delete('global_players',
         where: 'total_score = 0 AND total_penalty = 0');
+
+    // Clean up groups that no longer have any sessions
+    for (final groupId in affectedGroupIds) {
+      final remaining = await db.query('game_sessions', where: 'group_id = ?', whereArgs: [groupId]);
+      if (remaining.isEmpty) {
+        await db.delete('player_groups', where: 'id = ?', whereArgs: [groupId]);
+      }
+    }
   }
 
   Future<void> clearAllHistory() async {
@@ -419,6 +435,7 @@ class DatabaseHelper {
     await db.delete('session_scores');
     await db.delete('game_sessions');
     await db.delete('global_players');
+    await db.delete('player_groups');
   }
 
   Future<List<Map<String, dynamic>>> getSessionScores(int sessionId) async {
@@ -540,10 +557,13 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> getGlobalLeaderboard() async {
     final db = await instance.database;
-    return await db.query(
-      'global_players',
-      orderBy: 'total_score DESC, total_penalty ASC, name ASC',
-    );
+    return await db.rawQuery('''
+      SELECT g.* FROM global_players g
+      WHERE EXISTS (
+        SELECT 1 FROM players p WHERE p.name = g.name
+      )
+      ORDER BY g.total_score DESC, g.total_penalty ASC, g.name ASC
+    ''');
   }
 
   Future close() async {

@@ -150,26 +150,34 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
     await groupProvider.loadGroups();
     
     if (!mounted) return;
+
+    String searchQuery = '';
     
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return Consumer<GroupProvider>(
-          builder: (context, provider, _) {
-            return Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(32),
-                  topRight: Radius.circular(32),
-                ),
-              ),
-              padding: const EdgeInsets.all(28.0),
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.7,
-              ),
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Consumer<GroupProvider>(
+              builder: (context, provider, _) {
+                final filteredGroups = provider.groups.where((g) {
+                  return g.name.toLowerCase().contains(searchQuery.toLowerCase());
+                }).toList();
+
+                return Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(32),
+                      topRight: Radius.circular(32),
+                    ),
+                  ),
+                  padding: const EdgeInsets.all(28.0),
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.75,
+                  ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -193,20 +201,39 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
+                  TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Tìm kiếm đội...',
+                      prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textSecondary),
+                      filled: true,
+                      fillColor: const Color(0xFFF5F6FA),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                    onChanged: (val) {
+                      setModalState(() {
+                        searchQuery = val;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
                   Expanded(
-                    child: provider.groups.isEmpty
+                    child: filteredGroups.isEmpty
                         ? const Center(
                             child: Text(
-                              'Chưa có đội chơi nào',
+                              'Không tìm thấy đội chơi',
                               style: TextStyle(color: AppColors.textSecondary),
                             ),
                           )
                         : ListView.builder(
                             physics: const BouncingScrollPhysics(),
-                            itemCount: provider.groups.length,
+                            itemCount: filteredGroups.length,
                             itemBuilder: (context, index) {
-                              final group = provider.groups[index];
+                              final group = filteredGroups[index];
                               final isCurrent = group.id == provider.currentGroup?.id;
                               
                               return ListTile(
@@ -221,9 +248,26 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
                                     color: isCurrent ? const Color(0xFF7C5CFF) : AppColors.textPrimary,
                                   ),
                                 ),
-                                trailing: isCurrent 
-                                    ? const Icon(Icons.check_circle_rounded, color: Color(0xFF7C5CFF))
-                                    : null,
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (isCurrent)
+                                      const Icon(Icons.check_circle_rounded, color: Color(0xFF7C5CFF)),
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFFF4B72), size: 20),
+                                      onPressed: () async {
+                                        await provider.deleteGroup(group.id!);
+                                        if (provider.currentGroup == null && context.mounted) {
+                                          _checkAndInitGroup();
+                                        }
+                                        if (context.mounted) {
+                                          AppNotification.success(context, 'Đã xóa đội: ${group.name}');
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
                                 onTap: () {
                                   provider.setCurrentGroup(group);
                                   _groupNameController.text = group.name;
@@ -239,6 +283,8 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
                 ],
               ),
             );
+          },
+        );
           },
         );
       },

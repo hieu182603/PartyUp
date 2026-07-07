@@ -60,8 +60,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       'name': 'Hài hước',
       'subtitle': '80 câu hỏi',
       'icon': Icons.sentiment_very_satisfied_rounded,
-      'color': const Color(0xFFFFD54F),
-      'isLight': true,
+      'color': const Color(0xFFFF9F43), // Cam
+      'isLight': false,
     },
     {
       'name': 'Du lịch',
@@ -216,7 +216,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                   child: Container(
                     decoration: BoxDecoration(
                       color: isSelected ? color : Colors.white,
-                      borderRadius: BorderRadius.circular(28),
+                      borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: isSelected ? color : const Color(0xFFE8EBF3),
                         width: 1.5,
@@ -224,10 +224,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                       boxShadow: [
                         BoxShadow(
                           color: isSelected 
-                              ? color.withOpacity(0.25)
-                              : Colors.black.withOpacity(0.02),
-                          blurRadius: 10,
-                          offset: const Offset(0, 6),
+                              ? color.withOpacity(0.3)
+                              : Colors.black.withOpacity(0.05),
+                          blurRadius: 15,
+                          offset: const Offset(0, 8),
                         ),
                       ],
                     ),
@@ -250,17 +250,28 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
                               Container(
-                                padding: const EdgeInsets.all(12),
+                                width: 56,
+                                height: 56,
                                 decoration: BoxDecoration(
-                                  color: isSelected 
-                                      ? Colors.white.withOpacity(0.2)
-                                      : color.withOpacity(0.1),
+                                  gradient: isSelected 
+                                      ? LinearGradient(
+                                          colors: [Colors.white.withOpacity(0.3), Colors.white.withOpacity(0.1)],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        )
+                                      : LinearGradient(
+                                          colors: [color.withOpacity(0.2), color.withOpacity(0.05)],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
                                   shape: BoxShape.circle,
                                 ),
-                                child: Icon(
-                                  icon,
-                                  color: isSelected ? Colors.white : color,
-                                  size: 28,
+                                child: Center(
+                                  child: Icon(
+                                    icon,
+                                    color: isSelected ? Colors.white : color,
+                                    size: 32,
+                                  ),
                                 ),
                               ),
                               const Spacer(),
@@ -273,14 +284,14 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                 ),
                               ),
                               const SizedBox(height: 2),
-                              Text(
-                                subtitle,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: isSelected ? Colors.white.withOpacity(0.8) : AppColors.textSecondary,
+                                Text(
+                                  subtitle,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    color: isSelected ? Colors.white.withOpacity(0.9) : AppColors.textSecondary,
+                                  ),
                                 ),
-                              ),
                             ],
                           ),
                         ),
@@ -511,16 +522,23 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           });
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF7C5CFF) : const Color(0xFFF2F4F7),
+            color: isSelected ? AppColors.primary : const Color(0xFFF2F4F7),
             borderRadius: BorderRadius.circular(20),
+            boxShadow: isSelected ? [
+              BoxShadow(
+                color: AppColors.primary.withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ] : null,
           ),
           child: Text(
             title,
             style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
               color: isSelected ? Colors.white : AppColors.textSecondary,
             ),
             textAlign: TextAlign.center,

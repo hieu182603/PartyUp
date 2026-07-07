@@ -48,14 +48,17 @@ class _SuccessScreenState extends State<SuccessScreen> {
     final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     final player = todProvider.currentPlayer;
 
-    if (player != null) {
-      final points = todProvider.rewardPoints;
-      // Award points to player in DB + memory
-      await playerProvider.updatePlayerScore(player.id!, points);
-      // Mark this player as having played, accumulate round stats
-      todProvider.recordAnswer(points);
+    try {
+      if (player != null) {
+        final points = todProvider.rewardPoints;
+        await playerProvider.updatePlayerScore(player.id!, points);
+        todProvider.recordAnswer(points);
+      }
+    } catch (e) {
+      debugPrint('Lỗi khi ghi nhận điểm: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-    if (mounted) setState(() => _isLoading = false);
   }
 
   void _onContinue(BuildContext context) {

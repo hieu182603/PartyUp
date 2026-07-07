@@ -25,13 +25,13 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
   Timer? _timer;
 
   bool _isLocked = false;
+  bool _isTimerStarted = false;
 
   @override
   void initState() {
     super.initState();
     final todProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
     _timeLeft = todProvider.timeLimit;
-    _startTimer();
   }
 
   void _startTimer() {
@@ -115,8 +115,8 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
       _timer?.cancel();
       setState(() {
         _timeLeft = todProvider.timeLimit;
+        _isTimerStarted = false;
       });
-      _startTimer();
       AudioService.instance.playSFX('tap.mp3');
     } else {
       AppNotification.error(context, 'Kho câu hỏi đã cạn, không thể đổi câu khác!');
@@ -150,14 +150,14 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
 
     final bgGradient = isTruth
         ? const LinearGradient(
-            colors: [Color(0xFFFFF0F2), Color(0xFFFFFFFF), Color(0xFFFFF5F6)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+            colors: [Color(0xFFFFF0F4), Color(0xFFFCE4EC), Color(0xFFFFF0F4)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           )
         : const LinearGradient(
-            colors: [Color(0xFFEBF3FF), Color(0xFFFFFFFF), Color(0xFFF0F5FF)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+            colors: [Color(0xFFF0F5FF), Color(0xFFE1F0FF), Color(0xFFF0F5FF)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           );
 
     return Scaffold(
@@ -313,20 +313,25 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
                     const SizedBox(height: 16),
                     // Timer Pill / Progress Bar
                     Center(
-                      child: Container(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
                         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                         decoration: BoxDecoration(
-                          color: _timeLeft <= 5 ? const Color(0xFFFF4B72) : Colors.white,
+                          color: !_isTimerStarted 
+                              ? Colors.white 
+                              : (_timeLeft <= 5 ? const Color(0xFFFF4B72) : Colors.white),
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
-                            color: _timeLeft <= 5 
-                                ? Colors.transparent
-                                : (isTruth ? const Color(0xFFFFCCD3) : const Color(0xFFC0D9FF)),
+                            color: !_isTimerStarted 
+                                ? AppColors.textSecondary.withOpacity(0.2)
+                                : (_timeLeft <= 5 ? Colors.transparent : (isTruth ? const Color(0xFFFFCCD3) : const Color(0xFFC0D9FF))),
                             width: 1.5,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: _timeLeft <= 5 ? const Color(0xFFFF4B72).withOpacity(0.4) : Colors.black.withOpacity(0.02),
+                              color: !_isTimerStarted 
+                                  ? Colors.black.withOpacity(0.02)
+                                  : (_timeLeft <= 5 ? const Color(0xFFFF4B72).withOpacity(0.4) : Colors.black.withOpacity(0.02)),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),
@@ -337,16 +342,20 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
                           children: [
                             Icon(
                               Icons.access_time_filled_rounded,
-                              color: _timeLeft <= 5 ? Colors.white : (isTruth ? const Color(0xFFFF4B72) : const Color(0xFF368DFF)),
+                              color: !_isTimerStarted
+                                  ? AppColors.textSecondary.withOpacity(0.6)
+                                  : (_timeLeft <= 5 ? Colors.white : (isTruth ? const Color(0xFFFF4B72) : const Color(0xFF368DFF))),
                               size: 20,
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              '00:${_timeLeft.toString().padLeft(2, '0')}',
+                              '$_timeLeft giây',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w900,
-                                color: _timeLeft <= 5 ? Colors.white : (isTruth ? const Color(0xFFFF4B72) : const Color(0xFF368DFF)),
+                                color: !_isTimerStarted
+                                    ? AppColors.textSecondary.withOpacity(0.6)
+                                    : (_timeLeft <= 5 ? Colors.white : AppColors.textPrimary),
                               ),
                             ),
                           ],
@@ -361,7 +370,9 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
                         value: _timeLeft / todProvider.timeLimit,
                         backgroundColor: Colors.white.withOpacity(0.5),
                         valueColor: AlwaysStoppedAnimation<Color>(
-                          _timeLeft <= 5 ? const Color(0xFFFF4B72) : primaryColor,
+                          !_isTimerStarted 
+                              ? Colors.white 
+                              : (_timeLeft <= 5 ? const Color(0xFFFF4B72) : primaryColor),
                         ),
                         minHeight: 6,
                       ),
@@ -369,19 +380,19 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
                     const Spacer(flex: 2),
                     // Question display card
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 32.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 36.0),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(36),
+                        borderRadius: BorderRadius.circular(40),
                         border: Border.all(
                           color: isTruth ? const Color(0xFFFFECEF) : const Color(0xFFEBF3FF),
                           width: 2,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: primaryColor.withOpacity(0.06),
-                            blurRadius: 25,
-                            offset: const Offset(0, 12),
+                            color: primaryColor.withOpacity(0.15),
+                            blurRadius: 30,
+                            offset: const Offset(0, 16),
                           ),
                         ],
                       ),
@@ -403,7 +414,7 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
                                   child: Icon(
                                     isTruth ? Icons.help_outline_rounded : Icons.bolt_rounded,
                                     color: primaryColor,
-                                    size: 32,
+                                    size: 44,
                                   ),
                                 ),
                               ),
@@ -483,101 +494,134 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
                     ),
                     const Spacer(flex: 3),
                     // Bottom Action buttons row
-                    Row(
-                      children: [
-                        // Option 1: Answer (+Reward points)
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: _onAnswer,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 18),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: isTruth
-                                      ? [const Color(0xFFFF4B72), const Color(0xFFFF7292)]
-                                      : [const Color(0xFF368DFF), const Color(0xFF68A9FF)],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(24),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: (isTruth ? const Color(0xFFFF4B72) : const Color(0xFF368DFF)).withOpacity(0.3),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 6),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      transitionBuilder: (Widget child, Animation<double> animation) {
+                        return FadeTransition(opacity: animation, child: child);
+                      },
+                      child: IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          key: ValueKey<bool>(_isTimerStarted),
+                          children: [
+                            // Left Action Button: Start Timer or Complete
+                            Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                if (!_isTimerStarted) {
+                                  setState(() {
+                                    _isTimerStarted = true;
+                                  });
+                                  _startTimer();
+                                  AudioService.instance.playSFX('tap.mp3');
+                                } else {
+                                  _onAnswer();
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 18),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: isTruth
+                                        ? [const Color(0xFFFF4B72), const Color(0xFFFF7292)]
+                                        : [const Color(0xFF368DFF), const Color(0xFF68A9FF)],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
                                   ),
-                                ],
-                              ),
-                              child: Column(
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Icon(Icons.star_rounded, color: Colors.white, size: 20),
-                                      const SizedBox(width: 4),
+                                  borderRadius: BorderRadius.circular(24),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: (isTruth ? const Color(0xFFFF4B72) : const Color(0xFF368DFF)).withOpacity(0.3),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 6),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: !_isTimerStarted ? [
+                                        const Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 24),
+                                        const SizedBox(width: 6),
+                                        const Text(
+                                          'Bắt đầu tính giờ',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w900,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ] : [
+                                        const Icon(Icons.star_rounded, color: Colors.white, size: 20),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '+${todProvider.rewardPoints}',
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w900,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if (_isTimerStarted) ...[
+                                      const SizedBox(height: 4),
                                       Text(
-                                        '+${todProvider.rewardPoints}',
-                                        style: const TextStyle(
-                                          fontSize: 18,
+                                        'Hoàn thành',
+                                        style: TextStyle(
+                                          fontSize: 14,
                                           fontWeight: FontWeight.w900,
-                                          color: Colors.white,
+                                          color: _isLocked ? Colors.white.withOpacity(0.5) : Colors.white,
                                         ),
                                       ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Hoàn thành',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w900,
-                                      color: _isLocked ? Colors.white.withOpacity(0.5) : Colors.white,
-                                    ),
-                                  ),
-                                ],
+                                    ]
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        // Option 2: Skip (Penalty points)
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: _onSkip,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 18),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(24),
-                                border: Border.all(
-                                  color: primaryColor.withOpacity(0.4),
-                                  width: 2,
+                          const SizedBox(width: 16),
+                          // Option 2: Skip (Penalty points)
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: _onSkip,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 18),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(24),
+                                  border: Border.all(
+                                    color: primaryColor.withOpacity(0.4),
+                                    width: 2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.02),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
                                 ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.02),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.star_rounded, color: primaryColor, size: 20),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '${todProvider.penaltyPoints}',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900,
-                                          color: primaryColor,
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.star_rounded, color: primaryColor, size: 20),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${todProvider.penaltyPoints}',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w900,
+                                            color: primaryColor,
+                                          ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
+                                      ],
+                                    ),
                                   const SizedBox(height: 4),
                                   Text(
                                     'Bỏ cuộc',
@@ -594,6 +638,8 @@ class _ContentPlayingScreenState extends State<ContentPlayingScreen> {
                         ),
                       ],
                     ),
+                  ),
+                ),
                     // Re-roll button
                     if (todProvider.currentPlayer != null && todProvider.canReroll(todProvider.currentPlayer!.id!))
                       Padding(
