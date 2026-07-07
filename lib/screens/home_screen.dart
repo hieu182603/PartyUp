@@ -55,43 +55,67 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: tabBodies[_currentTabIndex],
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 15,
-              offset: const Offset(0, -4),
-            ),
-          ],
+      bottomNavigationBar: NavigationBarTheme(
+        data: NavigationBarThemeData(
+          indicatorColor: const Color(0xFF7C5CFF).withValues(alpha: 0.15),
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF7C5CFF),
+              );
+            }
+            return TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary.withValues(alpha: 0.8),
+            );
+          }),
         ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: BottomNavigationBar(
-              currentIndex: _currentTabIndex,
-              selectedItemColor: const Color(0xFF7C5CFF),
-              unselectedItemColor: AppColors.textSecondary,
-              showSelectedLabels: true,
-              showUnselectedLabels: true,
-              selectedFontSize: 12.0,
-              unselectedFontSize: 12.0,
-              type: BottomNavigationBarType.fixed,
-              backgroundColor: Colors.white,
-              elevation: 0,
-              onTap: (index) {
-                setState(() {
-                  _currentTabIndex = index;
-                });
-              },
-              items: const [
-                BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Trang chủ'),
-                BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Lịch sử'),
-                BottomNavigationBarItem(icon: Icon(Icons.emoji_events_outlined), label: 'Bảng xếp hạng'),
-                BottomNavigationBarItem(icon: Icon(Icons.settings_outlined), label: 'Cài đặt'),
-              ],
-            ),
+        child: Container(
+          decoration: BoxDecoration(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 20,
+                offset: const Offset(0, -5),
+              ),
+            ],
+          ),
+          child: NavigationBar(
+            selectedIndex: _currentTabIndex,
+            onDestinationSelected: (index) {
+              setState(() {
+                _currentTabIndex = index;
+              });
+            },
+            backgroundColor: Colors.white,
+            elevation: 0,
+            height: 70,
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.home_outlined, size: 26),
+                selectedIcon: Icon(Icons.home_filled, color: AppColors.primary, size: 30),
+                label: 'Trang chủ',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.history_outlined, size: 26),
+                selectedIcon: Icon(Icons.history_rounded, color: AppColors.primary, size: 30),
+                label: 'Lịch sử',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.emoji_events_outlined, size: 26),
+                selectedIcon: Icon(Icons.emoji_events_rounded, color: AppColors.warning, size: 30),
+                label: 'Xếp hạng',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.settings_outlined, size: 26),
+                selectedIcon: Icon(Icons.settings_rounded, color: AppColors.primary, size: 30),
+                label: 'Cài đặt',
+              ),
+            ],
           ),
         ),
       ),

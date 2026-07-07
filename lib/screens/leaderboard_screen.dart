@@ -83,7 +83,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
           'avatarSeed': e['name'] as String,
         }).toList();
 
-        return _buildLeaderboardContent(mappedList);
+        return RefreshIndicator(
+          onRefresh: () async {
+            setState(() {});
+          },
+          child: _buildLeaderboardContent(mappedList),
+        );
       },
     );
   }
@@ -107,17 +112,22 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
           'avatarSeed': e['name'] as String,
         }).toList();
 
-        return _buildLeaderboardContent(mappedList, isGroup: true, onItemTap: (item) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => GroupDetailsScreen(
-                groupId: item['id'] as int,
-                groupName: item['name'] as String,
+        return RefreshIndicator(
+          onRefresh: () async {
+            setState(() {});
+          },
+          child: _buildLeaderboardContent(mappedList, isGroup: true, onItemTap: (item) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => GroupDetailsScreen(
+                  groupId: item['id'] as int,
+                  groupName: item['name'] as String,
+                ),
               ),
-            ),
-          );
-        });
+            );
+          }),
+        );
       },
     );
   }
@@ -203,7 +213,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                         rank: 2,
                         height: 120,
                         avatarSeed: secondItem['avatarSeed'],
-                        color: const Color(0xFFE8EBF3),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFE0E0E0), Color(0xFF9E9E9E)],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
                         isGroup: isGroup,
                         onTap: onItemTap != null ? () => onItemTap(secondItem!) : null,
                       )
@@ -215,9 +229,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                         name: firstItem['name'],
                         score: firstItem['score'],
                         rank: 1,
-                        height: 160,
+                        height: 170,
                         avatarSeed: firstItem['avatarSeed'],
-                        color: const Color(0xFFFFF7E6),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFFD700), Color(0xFFFF9800)],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
                         hasCrown: true,
                         isGroup: isGroup,
                         onTap: onItemTap != null ? () => onItemTap(firstItem!) : null,
@@ -230,7 +248,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                         rank: 3,
                         height: 90,
                         avatarSeed: thirdItem['avatarSeed'],
-                        color: const Color(0xFFFFECEF),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFFB74D), Color(0xFFF57C00)],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
                         isGroup: isGroup,
                         onTap: onItemTap != null ? () => onItemTap(thirdItem!) : null,
                       )
@@ -353,7 +375,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
     required int rank,
     required double height,
     required String avatarSeed,
-    required Color color,
+    required Gradient gradient,
     bool hasCrown = false,
     bool isGroup = false,
     VoidCallback? onTap,
@@ -375,10 +397,16 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: rank == 1 ? const Color(0xFFFFB300) : Colors.white,
-                    width: 2.5,
+                    color: rank == 1 ? const Color(0xFFFFB300) : (rank == 2 ? const Color(0xFFBDBDBD) : const Color(0xFFFFB74D)),
+                    width: 3.0,
                   ),
-                  boxShadow: [
+                  boxShadow: rank == 1 ? [
+                    BoxShadow(
+                      color: const Color(0xFFFFD700).withOpacity(0.5),
+                      blurRadius: 15,
+                      spreadRadius: 2,
+                    ),
+                  ] : [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.08),
                       blurRadius: 10,
@@ -427,7 +455,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                   width: 24,
                   height: 24,
                   decoration: BoxDecoration(
-                    color: rank == 1 ? const Color(0xFFFFB300) : (rank == 2 ? const Color(0xFF9E9E9E) : const Color(0xFFBCAAA4)),
+                    gradient: rank == 1 ? const LinearGradient(colors: [Color(0xFFFFD700), Color(0xFFFF9800)]) 
+                            : (rank == 2 ? const LinearGradient(colors: [Color(0xFFE0E0E0), Color(0xFF9E9E9E)]) 
+                                         : const LinearGradient(colors: [Color(0xFFFFB74D), Color(0xFFF57C00)])),
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 2),
                   ),
@@ -450,25 +480,34 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
           Container(
             height: height,
             width: double.infinity,
+            clipBehavior: Clip.hardEdge,
             decoration: BoxDecoration(
-              color: color,
+              gradient: gradient,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(16),
                 topRight: Radius.circular(16),
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, -2),
+                )
+              ]
             ),
             child: Stack(
               alignment: Alignment.center,
               children: [
-                // Faint Rank Number
+                // Faint Rank Number (Watermark)
                 Positioned(
-                  top: 8,
+                  bottom: -28,
+                  right: -16,
                   child: Text(
                     '$rank',
                     style: TextStyle(
-                      fontSize: 80,
+                      fontSize: 120,
                       fontWeight: FontWeight.w900,
-                      color: Colors.black.withOpacity(0.04),
+                      color: Colors.white.withOpacity(0.15),
                       height: 1.0,
                     ),
                   ),
@@ -477,24 +516,31 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
                 Column(
                   mainAxisAlignment: MainAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     Text(
                       name,
                       style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      '$score điểm',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primary,
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12)
+                      ),
+                      child: Text(
+                        '$score đ',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ],

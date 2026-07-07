@@ -28,21 +28,12 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
 
   List<String> _difficultyLabels = ['Tất cả'];
   List<String?> _difficultyValues = [null];
-  final TextEditingController _teamNameController = TextEditingController();
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadDifficulties();
-      // Đã xóa đoạn gán tên groupProvider.currentGroup!.name vào _teamNameController
     });
-  }
-
-  @override
-  void dispose() {
-    _teamNameController.dispose();
-    super.dispose();
   }
 
   void _loadDifficulties() {
@@ -90,19 +81,8 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
   }
 
   void _onStart() async {
-    final teamName = _teamNameController.text.trim();
-    if (teamName.isEmpty) {
-      AppNotification.warning(context, 'Vui lòng nhập tên đội chơi!');
-      return;
-    }
-
     try {
       final todProvider = Provider.of<TruthOrDareProvider>(
-        context,
-        listen: false,
-      );
-      final groupProvider = Provider.of<GroupProvider>(context, listen: false);
-      final playerProvider = Provider.of<PlayerProvider>(
         context,
         listen: false,
       );
@@ -117,17 +97,6 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
         difficulty: _difficultyValues[_difficultyIndex],
         favoritesOnly: _favoritesOnly,
       );
-
-      // Initialize or update group
-      if (groupProvider.currentGroup == null) {
-        await groupProvider.createGroup(teamName);
-        playerProvider.clearPlayers();
-      } else if (groupProvider.currentGroup!.name != teamName) {
-        await groupProvider.updateGroupName(
-          groupProvider.currentGroup!.id!,
-          teamName,
-        );
-      }
 
       if (mounted) {
         Navigator.push(
@@ -183,67 +152,7 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.only(bottom: 24),
                 children: [
-                  const Text(
-                    'Thông tin phòng',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // Team name setting
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: const Color(0xFFE8EBF3),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF7C5CFF).withOpacity(0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.group_rounded,
-                            color: Color(0xFF7C5CFF),
-                            size: 22,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: TextField(
-                            controller: _teamNameController,
-                            decoration: const InputDecoration(
-                              hintText: 'Nhập tên đội chơi...',
-                              border: InputBorder.none,
-                              hintStyle: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
+
                   const Text(
                     'Cài đặt chung',
                     style: TextStyle(
@@ -260,7 +169,7 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        IconButton(
+                        _buildCircularButton(
                           onPressed: () {
                             if (_selectedTimeLimit > 5) {
                               setState(() {
@@ -273,11 +182,8 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                               );
                             }
                           },
-                          icon: const Icon(
-                            Icons.remove_circle_outline_rounded,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
+                          icon: 
+                            Icons.remove_rounded, color: AppColors.textSecondary),
                         Text(
                           '$activeTime giây',
                           style: const TextStyle(
@@ -286,7 +192,7 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                             color: AppColors.textPrimary,
                           ),
                         ),
-                        IconButton(
+                        _buildCircularButton(
                           onPressed: () {
                             if (_selectedTimeLimit < 120) {
                               setState(() {
@@ -299,11 +205,8 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                               );
                             }
                           },
-                          icon: const Icon(
-                            Icons.add_circle_outline_rounded,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
+                          icon: 
+                            Icons.add_rounded, color: AppColors.textSecondary),
                       ],
                     ),
                   ),
@@ -316,7 +219,7 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        IconButton(
+                        _buildCircularButton(
                           onPressed: () {
                             if (_selectedRewardPoints > 5) {
                               setState(() {
@@ -329,11 +232,8 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                               );
                             }
                           },
-                          icon: const Icon(
-                            Icons.remove_circle_outline_rounded,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
+                          icon: 
+                            Icons.remove_rounded, color: AppColors.textSecondary),
                         Text(
                           '+$activeReward điểm',
                           style: const TextStyle(
@@ -342,7 +242,7 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                             color: AppColors.textPrimary,
                           ),
                         ),
-                        IconButton(
+                        _buildCircularButton(
                           onPressed: () {
                             if (_selectedRewardPoints < 50) {
                               setState(() {
@@ -355,11 +255,8 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                               );
                             }
                           },
-                          icon: const Icon(
-                            Icons.add_circle_outline_rounded,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
+                          icon: 
+                            Icons.add_rounded, color: AppColors.textSecondary),
                       ],
                     ),
                   ),
@@ -369,10 +266,10 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                     icon: Icons.favorite_rounded,
                     iconColor: const Color(0xFFFF5B7F),
                     title: 'Chỉ chơi câu Yêu thích',
-                    trailing: Switch(
+                    trailing: Switch.adaptive(
                       value: _favoritesOnly,
-                      activeTrackColor: const Color(0xFFFF5B7F),
-                      activeThumbColor: Colors.white,
+                      activeColor: const Color(0xFFFF5B7F),
+                      activeTrackColor: const Color(0xFFFF5B7F).withOpacity(0.5),
                       inactiveTrackColor: const Color(0xFFE8EBF3),
                       inactiveThumbColor: const Color(0xFF9E9E9E),
                       trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
@@ -392,7 +289,7 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        IconButton(
+                        _buildCircularButton(
                           onPressed: () {
                             if (_selectedPenaltyPoints > -50) {
                               setState(() {
@@ -405,11 +302,8 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                               );
                             }
                           },
-                          icon: const Icon(
-                            Icons.remove_circle_outline_rounded,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
+                          icon: 
+                            Icons.remove_rounded, color: AppColors.textSecondary),
                         Text(
                           '$activePenalty điểm',
                           style: const TextStyle(
@@ -418,7 +312,7 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                             color: AppColors.textPrimary,
                           ),
                         ),
-                        IconButton(
+                        _buildCircularButton(
                           onPressed: () {
                             if (_selectedPenaltyPoints < -5) {
                               setState(() {
@@ -431,11 +325,8 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                               );
                             }
                           },
-                          icon: const Icon(
-                            Icons.add_circle_outline_rounded,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
+                          icon: 
+                            Icons.add_rounded, color: AppColors.textSecondary),
                       ],
                     ),
                   ),
@@ -448,7 +339,7 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        IconButton(
+                        _buildCircularButton(
                           onPressed: () {
                             if (_selectedRounds > 1) {
                               setState(() {
@@ -461,11 +352,8 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                               );
                             }
                           },
-                          icon: const Icon(
-                            Icons.remove_circle_outline_rounded,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
+                          icon: 
+                            Icons.remove_rounded, color: AppColors.textSecondary),
                         Text(
                           '$activeRounds vòng',
                           style: const TextStyle(
@@ -474,7 +362,7 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                             color: AppColors.textPrimary,
                           ),
                         ),
-                        IconButton(
+                        _buildCircularButton(
                           onPressed: () {
                             if (_selectedRounds < 20) {
                               setState(() {
@@ -487,11 +375,8 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                               );
                             }
                           },
-                          icon: const Icon(
-                            Icons.add_circle_outline_rounded,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
+                          icon: 
+                            Icons.add_rounded, color: AppColors.textSecondary),
                       ],
                     ),
                   ),
@@ -504,7 +389,7 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        IconButton(
+                        _buildCircularButton(
                           onPressed: () {
                             if (_difficultyIndex > 0) {
                               setState(() {
@@ -512,12 +397,8 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                               });
                             }
                           },
-                          icon: Icon(
-                            Icons.navigate_before_rounded,
-                            color: _difficultyIndex > 0 ? AppColors.textSecondary : Colors.transparent,
-                            size: 28,
-                          ),
-                        ),
+                          icon: 
+                            Icons.navigate_before_rounded, color: _difficultyIndex > 0 ? AppColors.textSecondary : Colors.transparent),
                         Text(
                           _difficultyLabels[_difficultyIndex],
                           style: const TextStyle(
@@ -526,7 +407,7 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                             color: AppColors.textPrimary,
                           ),
                         ),
-                        IconButton(
+                        _buildCircularButton(
                           onPressed: () {
                             if (_difficultyIndex <
                                 _difficultyLabels.length - 1) {
@@ -535,12 +416,8 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
                               });
                             }
                           },
-                          icon: Icon(
-                            Icons.navigate_next_rounded,
-                            color: _difficultyIndex < _difficultyLabels.length - 1 ? AppColors.textSecondary : Colors.transparent,
-                            size: 28,
-                          ),
-                        ),
+                          icon: 
+                            Icons.navigate_next_rounded, color: _difficultyIndex < _difficultyLabels.length - 1 ? AppColors.textSecondary : Colors.transparent),
                       ],
                     ),
                   ),
@@ -593,23 +470,40 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
               ),
             ),
             // Start Button
-            ElevatedButton(
-              onPressed: _onStart,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF7C5CFF),
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
+            Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.primary, Color(0xFFFF4B72)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                elevation: 6,
-                shadowColor: const Color(0xFF7C5CFF).withOpacity(0.3),
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
-              child: const Text(
-                'Bắt đầu trò chơi',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _onStart,
+                  borderRadius: BorderRadius.circular(30),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: Center(
+                      child: Text(
+                        'Bắt đầu trò chơi',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -627,10 +521,10 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
     required Widget trailing,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE8EBF3), width: 1.5),
       ),
       child: Row(
@@ -656,6 +550,25 @@ class _GameCustomizationScreenState extends State<GameCustomizationScreen> {
           ),
           trailing,
         ],
+      ),
+    );
+  }
+
+  Widget _buildCircularButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+    Color color = AppColors.textPrimary,
+  }) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Icon(icon, color: color, size: 22),
       ),
     );
   }

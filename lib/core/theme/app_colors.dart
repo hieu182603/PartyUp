@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  static const Color primary = Color(0xFF7C5CFF); // Tím chủ đạo
+  static const Color primary = Color(0xFF7C3AED); // Tím chủ đạo
   static const Color secondary = Color(0xFFFF4B72); // Hồng/Đỏ (Nút bắt đầu, v.v.)
   static const Color background = Color(0xFFFAFAFC); // Nền sáng
   static const Color textPrimary = Color(0xFF1E202C); // Chữ chính tối màu
@@ -9,10 +9,11 @@ class AppColors {
   static const Color truthColor = Color(0xFFFF4B72); // Thật - Hồng/Đỏ
   static const Color dareColor = Color(0xFF368DFF); // Thách - Xanh dương
   static const Color success = Color(0xFF00C48C);
-  static const Color warning = Color(0xFFFFCF5C); // Xu vàng, sao
+  static const Color warning = Color(0xFFFBBF24); // Xu vàng, sao
+  static const Color accent = Color(0xFFFBBF24);
 
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [Color(0xFF7C5CFF), Color(0xFF9D5CFF)],
+    colors: [Color(0xFF7C3AED), Color(0xFF9D5CFF)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
