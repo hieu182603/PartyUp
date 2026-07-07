@@ -362,40 +362,55 @@ class DatabaseHelper {
   }
 
   Future<void> deleteSession(int sessionId) async {
+    await deleteSessions([sessionId]);
+  }
+
+  Future<void> deleteSessions(List<int> sessionIds) async {
+    if (sessionIds.isEmpty) return;
     final db = await instance.database;
-    
-    // Deduct points from global_players
-    final List<Map<String, dynamic>> sessionTurns = await db.query('session_turns', where: 'session_id = ?', whereArgs: [sessionId]);
-    Map<String, int> scoresToDeduct = {};
-    Map<String, int> penaltiesToDeduct = {};
-    
-    for (var turn in sessionTurns) {
-      final player = turn['player_name'] as String;
-      final pointsChange = turn['points_change'] as int;
-      if (pointsChange > 0) {
-        scoresToDeduct[player] = (scoresToDeduct[player] ?? 0) + pointsChange;
-      } else if (pointsChange < 0) {
-        penaltiesToDeduct[player] = (penaltiesToDeduct[player] ?? 0) + pointsChange.abs();
+
+    for (final sessionId in sessionIds) {
+      // Deduct points from global_players
+      final List<Map<String, dynamic>> sessionTurns = await db.query(
+          'session_turns',
+          where: 'session_id = ?',
+          whereArgs: [sessionId]);
+      Map<String, int> scoresToDeduct = {};
+      Map<String, int> penaltiesToDeduct = {};
+
+      for (var turn in sessionTurns) {
+        final player = turn['player_name'] as String;
+        final pointsChange = turn['points_change'] as int;
+        if (pointsChange > 0) {
+          scoresToDeduct[player] = (scoresToDeduct[player] ?? 0) + pointsChange;
+        } else if (pointsChange < 0) {
+          penaltiesToDeduct[player] =
+              (penaltiesToDeduct[player] ?? 0) + pointsChange.abs();
+        }
       }
+
+      for (var player in {...scoresToDeduct.keys, ...penaltiesToDeduct.keys}) {
+        final score = scoresToDeduct[player] ?? 0;
+        final penalty = penaltiesToDeduct[player] ?? 0;
+        await db.rawUpdate('''
+          UPDATE global_players
+          SET total_score = MAX(0, total_score - ?),
+              total_penalty = MAX(0, total_penalty - ?)
+          WHERE name = ?
+        ''', [score, penalty, player]);
+      }
+
+      await db.delete('session_turns',
+          where: 'session_id = ?', whereArgs: [sessionId]);
+      await db.delete('session_scores',
+          where: 'session_id = ?', whereArgs: [sessionId]);
+      await db.delete('game_sessions',
+          where: 'id = ?', whereArgs: [sessionId]);
     }
-    
-    for (var player in {...scoresToDeduct.keys, ...penaltiesToDeduct.keys}) {
-      final score = scoresToDeduct[player] ?? 0;
-      final penalty = penaltiesToDeduct[player] ?? 0;
-      await db.rawUpdate('''
-        UPDATE global_players 
-        SET total_score = MAX(0, total_score - ?),
-            total_penalty = MAX(0, total_penalty - ?)
-        WHERE name = ?
-      ''', [score, penalty, player]);
-    }
-    
-    await db.delete('session_turns', where: 'session_id = ?', whereArgs: [sessionId]);
-    await db.delete('session_scores', where: 'session_id = ?', whereArgs: [sessionId]);
-    await db.delete('game_sessions', where: 'id = ?', whereArgs: [sessionId]);
-    
+
     // Clean up empty global players
-    await db.delete('global_players', where: 'total_score = 0 AND total_penalty = 0');
+    await db.delete('global_players',
+        where: 'total_score = 0 AND total_penalty = 0');
   }
 
   Future<void> clearAllHistory() async {
