@@ -15,6 +15,8 @@ import 'truth_or_dare/random_player_screen.dart';
 import 'truth_or_dare/truth_or_dare_choice_screen.dart';
 import 'truth_or_dare/content_playing_screen.dart';
 import 'truth_or_dare/result_screen.dart';
+import 'group_setup_screen.dart';
+import 'secret_rule/secret_rule_setup_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -28,16 +30,26 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoadingContinue = false;
 
   void _onGameCardTap(BuildContext context, String modeName) {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final groupProvider = Provider.of<GroupProvider>(context, listen: false);
+
     if (modeName == 'truth_or_dare') {
       final todProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
-      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-      final groupProvider = Provider.of<GroupProvider>(context, listen: false);
-      
       todProvider.reset();
       playerProvider.resetScores();
       groupProvider.clearCurrentGroup();
 
       Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen()));
+    } else if (modeName == 'secret_rule') {
+      playerProvider.resetScores();
+      groupProvider.clearCurrentGroup();
+      
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => const GroupSetupScreen(
+          gameMode: 'secret_rule',
+          nextRoute: SecretRuleSetupScreen(),
+        ),
+      ));
     } else {
       AppNotification.info(context, 'Chức năng đang phát triển, sớm ra mắt! 🚀');
     }

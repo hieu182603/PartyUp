@@ -5,6 +5,7 @@ import 'providers/group_provider.dart';
 import 'providers/player_provider.dart';
 import 'providers/game_content_provider.dart';
 import 'providers/truth_or_dare_provider.dart';
+import 'providers/secret_rule_provider.dart';
 import 'screens/splash_screen.dart';
 
 void main() {
@@ -23,6 +24,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => PlayerProvider()),
         ChangeNotifierProvider(create: (_) => GameContentProvider()),
         ChangeNotifierProvider(create: (_) => TruthOrDareProvider()),
+        ChangeNotifierProvider(create: (_) => SecretRuleProvider()),
       ],
       child: MaterialApp(
         title: 'PartyUp',

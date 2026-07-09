@@ -74,6 +74,7 @@ flutter:
     - assets/images/
     - assets/audio/
     - assets/data/game_data.json
+    - assets/data/secret_rules.json
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

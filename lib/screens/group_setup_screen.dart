@@ -10,9 +10,17 @@ import '../models/game_session.dart';
 import '../services/database_helper.dart';
 import 'truth_or_dare/random_player_screen.dart';
 import '../providers/truth_or_dare_provider.dart';
+import '../providers/secret_rule_provider.dart';
 
 class GroupSetupScreen extends StatefulWidget {
-  const GroupSetupScreen({super.key});
+  final String gameMode;
+  final Widget nextRoute;
+
+  const GroupSetupScreen({
+    super.key,
+    this.gameMode = 'truth_or_dare',
+    this.nextRoute = const RandomPlayerScreen(),
+  });
 
   @override
   State<GroupSetupScreen> createState() => _GroupSetupScreenState();
@@ -340,15 +348,20 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
     await playerProvider.resetScores();
 
     if (groupProvider.currentGroup != null) {
-      final session = GameSession(groupId: groupProvider.currentGroup!.id!, gameMode: 'truth_or_dare');
+      final session = GameSession(groupId: groupProvider.currentGroup!.id!, gameMode: widget.gameMode);
       final sessionId = await DatabaseHelper.instance.createGameSession(session);
-      tdProvider.currentSessionId = sessionId;
+      
+      if (widget.gameMode == 'truth_or_dare') {
+        tdProvider.currentSessionId = sessionId;
+      } else if (widget.gameMode == 'secret_rule') {
+        Provider.of<SecretRuleProvider>(context, listen: false).currentSessionId = sessionId;
+      }
     }
 
     if (mounted) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const RandomPlayerScreen()),
+        MaterialPageRoute(builder: (_) => widget.nextRoute),
       );
     }
   }
