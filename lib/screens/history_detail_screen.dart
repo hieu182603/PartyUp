@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:random_avatar/random_avatar.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../core/theme/app_colors.dart';
+import '../core/app_notification.dart';
 import '../services/database_helper.dart';
+import '../providers/group_provider.dart';
+import '../providers/player_provider.dart';
+import '../providers/truth_or_dare_provider.dart';
+import '../models/player_group.dart';
+import '../models/player.dart';
+import 'truth_or_dare/random_player_screen.dart';
 
 class HistoryDetailScreen extends StatefulWidget {
   final int sessionId;
@@ -25,10 +33,120 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _dataFuture = Future.wait([
-      DatabaseHelper.instance.getSessionScores(widget.sessionId),
-      DatabaseHelper.instance.getSessionTurns(widget.sessionId),
-    ]);
+    _dataFuture = _loadData();
+  }
+
+  Future<List<dynamic>> _loadData() async {
+    final turns = await DatabaseHelper.instance.getSessionTurns(widget.sessionId);
+    List<Map<String, dynamic>> scores;
+    
+    if (widget.sessionData['ended_at'] != null) {
+      scores = await DatabaseHelper.instance.getSessionScores(widget.sessionId);
+    } else {
+      final groupId = widget.sessionData['group_id'] as int;
+      final players = await DatabaseHelper.instance.getPlayersByGroup(groupId);
+      
+      final Map<String, int> playerScores = {};
+      for (var player in players) {
+        playerScores[player.name] = 0;
+      }
+      for (var turn in turns) {
+        final name = turn['player_name'] as String;
+        final pts = turn['points_change'] as int;
+        playerScores[name] = (playerScores[name] ?? 0) + pts;
+      }
+
+      scores = players.map((p) => {
+        'player_name': p.name,
+        'player_avatar': p.avatar ?? '',
+        'score': playerScores[p.name] ?? 0,
+      }).toList();
+
+      scores.sort((a, b) => (b['score'] as int).compareTo(a['score'] as int));
+    }
+    return [scores, turns];
+  }
+
+  Future<void> _continueGame() async {
+    final groupProvider = Provider.of<GroupProvider>(context, listen: false);
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final tdProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
+
+    final groupId = widget.sessionData['group_id'] as int;
+    final String groupName = widget.sessionData['group_name'] ?? 'Nhóm';
+    final String gameMode = widget.sessionData['game_mode'] ?? 'truth_or_dare';
+
+    if (gameMode != 'truth_or_dare') {
+      AppNotification.error(context, 'Chế độ này chưa hỗ trợ tiếp tục chơi');
+      return;
+    }
+
+    final existingGroup = groupProvider.groups.cast<PlayerGroup?>().firstWhere(
+      (g) => g?.id == groupId,
+      orElse: () => null,
+    );
+    
+    if (existingGroup != null) {
+      groupProvider.setCurrentGroup(existingGroup);
+    } else {
+      groupProvider.setCurrentGroup(PlayerGroup(id: groupId, name: groupName));
+    }
+
+    await playerProvider.loadPlayersForGroup(groupId);
+
+    final turns = (await _dataFuture)[1] as List<Map<String, dynamic>>;
+    int currentRound = 1;
+    Set<int> playedIds = {};
+
+    // Calculate scores and penalties from turns to restore player states accurately
+    final Map<String, int> sessionScores = {};
+    final Map<String, int> sessionPenalties = {};
+
+    for (var turn in turns) {
+      final name = turn['player_name'] as String;
+      final pts = turn['points_change'] as int;
+      sessionScores[name] = (sessionScores[name] ?? 0) + pts;
+      if (pts < 0) {
+        sessionPenalties[name] = (sessionPenalties[name] ?? 0) + pts.abs();
+      }
+    }
+
+    await playerProvider.restoreSessionScoresAndPenalties(sessionScores, sessionPenalties);
+
+    if (turns.isNotEmpty) {
+      for (var turn in turns) {
+        final roundNum = turn['round_number'] as int;
+        if (roundNum > currentRound) {
+          currentRound = roundNum;
+        }
+      }
+
+      final turnsInCurrentRound = turns.where((t) => t['round_number'] == currentRound).toList();
+      
+      for (var turn in turnsInCurrentRound) {
+        final playerName = turn['player_name'] as String;
+        final player = playerProvider.players.cast<dynamic?>().firstWhere(
+          (p) => p?.name == playerName,
+          orElse: () => null,
+        );
+        if (player != null && player.id != null) {
+          playedIds.add(player.id!);
+        }
+      }
+
+      if (playedIds.length >= playerProvider.players.length && playerProvider.players.isNotEmpty) {
+        currentRound++;
+        playedIds.clear();
+      }
+    }
+
+    tdProvider.restoreSession(widget.sessionId, currentRound, playedIds);
+
+    if (!context.mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const RandomPlayerScreen()),
+    );
   }
 
   @override
@@ -179,6 +297,32 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
           );
         },
       ),
+      bottomNavigationBar: endedAt == null ? SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7C5CFF),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              elevation: 4,
+              shadowColor: const Color(0xFF7C5CFF).withOpacity(0.5),
+            ),
+            onPressed: _continueGame,
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.play_arrow_rounded, color: Colors.white, size: 24),
+                SizedBox(width: 8),
+                Text(
+                  'Tiếp tục chơi',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ) : null,
     );
   }
 

@@ -344,6 +344,8 @@ class DatabaseHelper {
     final List<Map<String, dynamic>> maps = await db.rawQuery('''
       SELECT 
         s.id, 
+        s.group_id,
+        s.game_mode,
         s.started_at, 
         s.ended_at, 
         g.name as group_name,

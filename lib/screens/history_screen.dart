@@ -40,8 +40,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   void _reload() {
+    final future = DatabaseHelper.instance.getGameHistory();
     setState(() {
-      _historyFuture = DatabaseHelper.instance.getGameHistory();
+      _historyFuture = future;
+    });
+    future.then((data) {
+      if (mounted) {
+        setState(() {
+          _loaded = data;
+        });
+      }
     });
   }
 
