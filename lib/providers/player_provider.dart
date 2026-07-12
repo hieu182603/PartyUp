@@ -59,4 +59,14 @@ class PlayerProvider with ChangeNotifier {
     }
     notifyListeners();
   }
+
+  Future<void> restoreSessionScoresAndPenalties(Map<String, int> scores, Map<String, int> penalties) async {
+    for (int i = 0; i < _players.length; i++) {
+      final name = _players[i].name;
+      _players[i].score = scores[name] ?? 0;
+      _players[i].penalty = penalties[name] ?? 0;
+      await DatabaseHelper.instance.updatePlayer(_players[i]);
+    }
+    notifyListeners();
+  }
 }

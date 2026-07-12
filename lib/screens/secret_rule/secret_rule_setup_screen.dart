@@ -163,7 +163,7 @@ class _SecretRuleSetupScreenState extends State<SecretRuleSetupScreen> {
           decoration: BoxDecoration(
             color: isSelected ? activeColor : Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: isSelected ? activeColor : const Color(0xFFE8EBF3), width: 1.5),
+            border: Border.all(color: isSelected ? activeColor : const Color(0xFFCBD5E1), width: 1.5),
           ),
           alignment: Alignment.center,
           child: Text(
@@ -193,6 +193,9 @@ class _SecretRuleSetupScreenState extends State<SecretRuleSetupScreen> {
             value: value,
             onChanged: onChanged,
             activeColor: const Color(0xFF7C5CFF),
+            inactiveThumbColor: const Color(0xFF94A3B8),
+            inactiveTrackColor: const Color(0xFFE2E8F0),
+            trackOutlineColor: MaterialStateProperty.all(Colors.transparent),
           ),
         ],
       ),

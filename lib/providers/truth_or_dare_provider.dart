@@ -200,4 +200,24 @@ class TruthOrDareProvider with ChangeNotifier {
     _state = 'selecting_player';
     notifyListeners();
   }
+
+  // ─── Restore Session ──────────────────────────────────────────────────────
+  void restoreSession(int sessionId, int round, Set<int> playedIds) {
+    currentSessionId = sessionId;
+    currentRound = round;
+    _playedThisRound.clear();
+    _playedThisRound.addAll(playedIds);
+    
+    // Reset turn-specific state
+    _currentPlayer = null;
+    _currentContent = null;
+    _state = 'selecting_player';
+    
+    // Reset round stats (these would be partial since we don't have full history, but we start fresh for the rest of the round)
+    correctCount = 0;
+    skipCount = 0;
+    pointsGainedThisRound = 0;
+    
+    notifyListeners();
+  }
 }
