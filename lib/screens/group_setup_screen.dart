@@ -316,7 +316,14 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
     if (currentGroup == null) return;
 
     final players = Provider.of<PlayerProvider>(context, listen: false).players;
+    
+    if (players.length >= 10) {
+      AppNotification.warning(context, 'Tối đa 10 người chơi!');
+      return;
+    }
+
     final isDuplicate = players.any(
+
       (p) => p.name.toLowerCase() == name.toLowerCase(),
     );
     if (isDuplicate) {
@@ -467,9 +474,9 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
                         mainAxisSpacing: 24,
                         childAspectRatio: 0.7,
                       ),
-                      itemCount: players.length + 1,
+                      itemCount: players.length < 10 ? players.length + 1 : players.length,
                       itemBuilder: (context, index) {
-                        if (index == players.length) {
+                        if (index == players.length && players.length < 10) {
                           // The special "+" Add Player card
                           return GestureDetector(
                             onTap: _showAddPlayerBottomSheet,
