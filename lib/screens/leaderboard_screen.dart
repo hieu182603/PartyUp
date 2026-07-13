@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:random_avatar/random_avatar.dart';
-import 'package:provider/provider.dart';
 import '../core/theme/app_colors.dart';
-import '../providers/player_provider.dart';
 import '../services/database_helper.dart';
 import 'group_details_screen.dart';
 
@@ -13,18 +11,21 @@ class LeaderboardScreen extends StatefulWidget {
   State<LeaderboardScreen> createState() => _LeaderboardScreenState();
 }
 
-class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _LeaderboardScreenState extends State<LeaderboardScreen> with TickerProviderStateMixin {
+  late TabController _gameModeTabController;
+  late TabController _subTabController;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _gameModeTabController = TabController(length: 2, vsync: this);
+    _subTabController = TabController(length: 2, vsync: this);
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _gameModeTabController.dispose();
+    _subTabController.dispose();
     super.dispose();
   }
 
@@ -42,7 +43,34 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
         elevation: 0,
         automaticallyImplyLeading: false,
         bottom: TabBar(
-          controller: _tabController,
+          controller: _gameModeTabController,
+          labelColor: const Color(0xFF7C5CFF),
+          unselectedLabelColor: AppColors.textSecondary,
+          indicatorColor: const Color(0xFF7C5CFF),
+          indicatorWeight: 3,
+          labelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+          tabs: const [
+            Tab(text: 'Truth or Dare'),
+            Tab(text: 'Secret Rule'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _gameModeTabController,
+        children: [
+          _buildGameModeBody('truth_or_dare'),
+          _buildGameModeBody('secret_rule'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGameModeBody(String gameMode) {
+    return Column(
+      children: [
+        TabBar(
+          controller: _subTabController,
           labelColor: const Color(0xFF7C5CFF),
           unselectedLabelColor: AppColors.textSecondary,
           indicatorColor: const Color(0xFF7C5CFF),
@@ -54,20 +82,22 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
             Tab(text: 'Các Nhóm'),
           ],
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildGlobalTab(),
-          _buildGroupsTab(),
-        ],
-      ),
+        Expanded(
+          child: TabBarView(
+            controller: _subTabController,
+            children: [
+              _buildGlobalTab(gameMode),
+              _buildGroupsTab(gameMode),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildGlobalTab() {
+  Widget _buildGlobalTab(String gameMode) {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: DatabaseHelper.instance.getGlobalLeaderboard(),
+      future: DatabaseHelper.instance.getGlobalLeaderboardByMode(gameMode),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -93,9 +123,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
     );
   }
 
-  Widget _buildGroupsTab() {
+  Widget _buildGroupsTab(String gameMode) {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: DatabaseHelper.instance.getGroupLeaderboard(),
+      future: DatabaseHelper.instance.getGroupLeaderboardByMode(gameMode),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());

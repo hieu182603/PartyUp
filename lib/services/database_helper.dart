@@ -338,9 +338,14 @@ class DatabaseHelper {
     }
   }
 
-  Future<List<Map<String, dynamic>>> getGameHistory() async {
+  Future<List<Map<String, dynamic>>> getGameHistory({String? gameMode}) async {
     final db = await instance.database;
-    // Use session_scores for completed games; fall back to current players.score for incomplete ones
+    String whereClause = '';
+    List<dynamic> whereArgs = [];
+    if (gameMode != null) {
+      whereClause = 'WHERE s.game_mode = ?';
+      whereArgs = [gameMode];
+    }
     final List<Map<String, dynamic>> maps = await db.rawQuery('''
       SELECT 
         s.id, 
@@ -358,8 +363,9 @@ class DatabaseHelper {
         (SELECT COUNT(*) FROM session_scores WHERE session_id = s.id) as has_session_scores
       FROM game_sessions s
       JOIN player_groups g ON s.group_id = g.id
+      $whereClause
       ORDER BY s.started_at DESC
-    ''');
+    ''', whereArgs);
     return maps;
   }
 
@@ -489,6 +495,20 @@ class DatabaseHelper {
     ''');
   }
 
+  Future<List<Map<String, dynamic>>> getGroupLeaderboardByMode(String gameMode) async {
+    final db = await database;
+    return await db.rawQuery('''
+      SELECT g.id, g.name,
+        COALESCE(SUM(st.points_change), 0) as total_score
+      FROM player_groups g
+      INNER JOIN game_sessions s ON s.group_id = g.id AND s.ended_at IS NOT NULL
+      LEFT JOIN session_turns st ON st.session_id = s.id
+      WHERE s.game_mode = ?
+      GROUP BY g.id, g.name
+      ORDER BY total_score DESC, g.name ASC
+    ''', [gameMode]);
+  }
+
   Future<List<Player>> getPlayersWithTotalScoreByGroup(int groupId) async {
     final db = await database;
     final result = await db.rawQuery('''
@@ -566,6 +586,18 @@ class DatabaseHelper {
       )
       ORDER BY g.total_score DESC, g.total_penalty ASC, g.name ASC
     ''');
+  }
+
+  Future<List<Map<String, dynamic>>> getGlobalLeaderboardByMode(String gameMode) async {
+    final db = await database;
+    return await db.rawQuery('''
+      SELECT st.player_name as name, SUM(st.points_change) as total_score
+      FROM session_turns st
+      JOIN game_sessions s ON st.session_id = s.id
+      WHERE s.game_mode = ?
+      GROUP BY st.player_name
+      ORDER BY total_score DESC
+    ''', [gameMode]);
   }
 
   Future close() async {

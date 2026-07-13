@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:random_avatar/random_avatar.dart';
 import '../../core/theme/app_colors.dart';
+import '../../models/player.dart';
 import '../../providers/player_provider.dart';
 import '../../providers/secret_rule_provider.dart';
+import '../../services/database_helper.dart';
 
 class ViolatorSelectionScreen extends StatefulWidget {
   const ViolatorSelectionScreen({super.key});
@@ -23,8 +25,24 @@ class _ViolatorSelectionScreenState extends State<ViolatorSelectionScreen> {
     }
 
     final provider = Provider.of<SecretRuleProvider>(context, listen: false);
+    final players = Provider.of<PlayerProvider>(context, listen: false).players;
+    final reason = _reasonController.text.trim();
+
     for (final id in _selectedPlayerIds) {
       provider.addViolation(id);
+      final player = players.cast<Player?>().firstWhere(
+        (p) => p?.id == id,
+        orElse: () => null,
+      );
+      if (player != null && provider.currentSessionId != null) {
+        DatabaseHelper.instance.insertSessionTurn(
+          provider.currentSessionId!,
+          provider.currentRound,
+          player.name,
+          reason.isNotEmpty ? reason : 'Nội quy: ${provider.activeRules.isNotEmpty ? provider.activeRules.last.content : ''}',
+          -1,
+        );
+      }
     }
     
     Navigator.pop(context);

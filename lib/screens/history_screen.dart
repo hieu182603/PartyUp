@@ -17,8 +17,10 @@ class HistoryScreen extends StatefulWidget {
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
-class _HistoryScreenState extends State<HistoryScreen> {
+class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProviderStateMixin {
   late Future<List<Map<String, dynamic>>> _historyFuture;
+  late TabController _tabController;
+  String? _currentGameMode;
 
   // Multi-select state
   bool _selectionMode = false;
@@ -36,11 +38,36 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        setState(() {
+          switch (_tabController.index) {
+            case 0:
+              _currentGameMode = null;
+              break;
+            case 1:
+              _currentGameMode = 'truth_or_dare';
+              break;
+            case 2:
+              _currentGameMode = 'secret_rule';
+              break;
+          }
+        });
+        _reload();
+      }
+    });
     _reload();
   }
 
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
   void _reload() {
-    final future = DatabaseHelper.instance.getGameHistory();
+    final future = DatabaseHelper.instance.getGameHistory(gameMode: _currentGameMode);
     setState(() {
       _historyFuture = future;
     });
@@ -235,6 +262,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
       backgroundColor: Colors.transparent,
       elevation: 0,
       automaticallyImplyLeading: false,
+      bottom: TabBar(
+        controller: _tabController,
+        labelColor: const Color(0xFF7C5CFF),
+        unselectedLabelColor: AppColors.textSecondary,
+        indicatorColor: const Color(0xFF7C5CFF),
+        indicatorWeight: 3,
+        labelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+        tabs: const [
+          Tab(text: 'Tất cả'),
+          Tab(text: 'Truth or Dare'),
+          Tab(text: 'Secret Rule'),
+        ],
+      ),
       actions: [
         if (_loaded.isNotEmpty)
           IconButton(
@@ -561,7 +602,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      // Group name + "Bỏ dở" badge
+                                      // Group name + game mode badge
                                       Row(
                                         children: [
                                           Expanded(
@@ -573,6 +614,28 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                                 color: AppColors.textPrimary,
                                               ),
                                               overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          Container(
+                                            margin: const EdgeInsets.only(left: 6),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: item['game_mode'] == 'secret_rule'
+                                                  ? const Color(0xFFFFF0F0)
+                                                  : const Color(0xFFF0EDFF),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              item['game_mode'] == 'secret_rule' ? 'Secret Rule' : 'Truth or Dare',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w800,
+                                                color: item['game_mode'] == 'secret_rule'
+                                                    ? const Color(0xFFFF4B72)
+                                                    : const Color(0xFF7C5CFF),
+                                              ),
                                             ),
                                           ),
                                           if (!isCompleted)
