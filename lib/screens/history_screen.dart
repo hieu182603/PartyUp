@@ -603,21 +603,22 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       // Group name + game mode badge
-                                      Row(
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 6,
+                                        crossAxisAlignment: WrapCrossAlignment.center,
                                         children: [
-                                          Expanded(
-                                            child: Text(
-                                              groupName,
-                                              style: const TextStyle(
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.w900,
-                                                color: AppColors.textPrimary,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
+                                          Text(
+                                            groupName,
+                                            style: const TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w900,
+                                              color: AppColors.textPrimary,
                                             ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
                                           ),
                                           Container(
-                                            margin: const EdgeInsets.only(left: 6),
                                             padding: const EdgeInsets.symmetric(
                                                 horizontal: 8, vertical: 4),
                                             decoration: BoxDecoration(
@@ -640,7 +641,6 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                                           ),
                                           if (!isCompleted)
                                             Container(
-                                              margin: const EdgeInsets.only(left: 6),
                                               padding: const EdgeInsets.symmetric(
                                                   horizontal: 8, vertical: 4),
                                               decoration: BoxDecoration(
