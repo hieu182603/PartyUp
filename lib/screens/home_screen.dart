@@ -13,7 +13,6 @@ import 'leaderboard_screen.dart';
 import 'settings_screen.dart';
 import 'truth_or_dare/random_player_screen.dart';
 import 'truth_or_dare/truth_or_dare_choice_screen.dart';
-import 'truth_or_dare/content_playing_screen.dart';
 import 'truth_or_dare/result_screen.dart';
 import 'group_setup_screen.dart';
 import 'secret_rule/secret_rule_setup_screen.dart';
