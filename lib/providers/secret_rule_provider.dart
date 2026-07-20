@@ -15,6 +15,8 @@ class SecretRuleProvider with ChangeNotifier {
   bool soundEnabled = true;
   bool stackingRules = true;
 
+  List<SecretRule> get allRules => _allRules;
+
   // State
   int currentRound = 1;
   int timeLeft = 180;
@@ -35,6 +37,35 @@ class SecretRuleProvider with ChangeNotifier {
   Map<int, int> violations = {};
 
   final Random _random = Random();
+
+  List<SecretRule> peekRandomRules(int count) {
+    final levelRules = _allRules.where((r) => r.level == selectedLevel).toList();
+    if (levelRules.isEmpty) return [];
+    final available = levelRules.where((r) => !activeRules.contains(r)).toList()..shuffle();
+    if (available.length < count) {
+      levelRules.shuffle();
+      return levelRules.take(count).toList();
+    }
+    return available.take(count).toList();
+  }
+
+  void setActiveRule(SecretRule rule) {
+    if (!stackingRules) {
+      activeRules.clear();
+    }
+    activeRules.add(rule);
+    notifyListeners();
+  }
+
+  void useChangeRuleChance() {
+    if (changeRuleChances > 0) {
+      changeRuleChances--;
+      if (activeRules.isNotEmpty) {
+        activeRules.removeLast();
+      }
+      notifyListeners();
+    }
+  }
 
   // Reset for a new game
   void reset() {
@@ -84,22 +115,6 @@ class SecretRuleProvider with ChangeNotifier {
 
   void startRound() {
     currentPlayerIndex = 0;
-    if (_allRules.isEmpty) return;
-
-    // Filter rules by level
-    final levelRules = _allRules.where((r) => r.level == selectedLevel).toList();
-    if (levelRules.isEmpty) return;
-
-    // Pick a new rule that isn't already active
-    final availableRules = levelRules.where((r) => !activeRules.contains(r)).toList();
-    if (availableRules.isNotEmpty) {
-      final newRule = availableRules[_random.nextInt(availableRules.length)];
-      if (!stackingRules) {
-        activeRules.clear();
-      }
-      activeRules.add(newRule);
-    }
-
     timeLeft = timePerRound;
     startTimer();
     notifyListeners();

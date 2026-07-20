@@ -9,6 +9,8 @@ import '../providers/player_provider.dart';
 import '../providers/truth_or_dare_provider.dart';
 import 'categories_screen.dart';
 import 'history_detail_screen.dart';
+import 'group_setup_screen.dart';
+import 'secret_rule/secret_rule_setup_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -364,7 +366,7 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    'Bạn chưa có lịch sử chơi nào',
+                    'Chưa có lịch sử',
                     style: TextStyle(
                         color: AppColors.textPrimary,
                         fontSize: 18,
@@ -372,7 +374,7 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Làm một trận ngay nhé!',
+                    'Vào chơi game mới nhé!',
                     style: TextStyle(
                         color: AppColors.textSecondary.withOpacity(0.8),
                         fontSize: 14,
@@ -389,13 +391,23 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                       elevation: 0,
                     ),
                     onPressed: () {
-                      final todProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
                       final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
                       final groupProvider = Provider.of<GroupProvider>(context, listen: false);
-                      todProvider.reset();
                       playerProvider.resetScores();
                       groupProvider.clearCurrentGroup();
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen()));
+
+                      if (_currentGameMode == 'secret_rule') {
+                        Navigator.push(context, MaterialPageRoute(
+                          builder: (_) => const GroupSetupScreen(
+                            gameMode: 'secret_rule',
+                            nextRoute: SecretRuleSetupScreen(),
+                          ),
+                        ));
+                      } else {
+                        final todProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
+                        todProvider.reset();
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen()));
+                      }
                     },
                     child: const Text(
                       'Chơi ngay',
