@@ -17,12 +17,14 @@ import 'skip_screen.dart';
 class GameCardState {
   final int index;
   final String type; // 'truth' or 'dare'
+  final int coverStyle;
   bool isFlipped;
   GameContent? content;
 
   GameCardState({
     required this.index,
     required this.type,
+    required this.coverStyle,
     this.isFlipped = false,
     this.content,
   });
@@ -32,14 +34,15 @@ class TruthOrDareChoiceScreen extends StatefulWidget {
   const TruthOrDareChoiceScreen({super.key});
 
   @override
-  State<TruthOrDareChoiceScreen> createState() => _TruthOrDareChoiceScreenState();
+  State<TruthOrDareChoiceScreen> createState() =>
+      _TruthOrDareChoiceScreenState();
 }
 
-class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with TickerProviderStateMixin {
+class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen>
+    with TickerProviderStateMixin {
   // Animation controllers
   late AnimationController _shuffleController;
-  late Animation<double> _shuffleOffsetAnimation;
-  
+
   late AnimationController _flipController;
   late Animation<double> _flipAnimation;
 
@@ -58,24 +61,16 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
   @override
   void initState() {
     super.initState();
-    
-    // 1. Generate 3 Truth and 3 Dare cards
-    final List<String> types = ['truth', 'truth', 'truth', 'dare', 'dare', 'dare'];
-    types.shuffle();
-    for (int i = 0; i < 6; i++) {
-      _cards.add(GameCardState(index: i, type: types[i]));
-    }
 
-    // 2. Setup shuffle animations
+    // 1. Generate the deck. Each row receives all three cover colors.
+    _generateCards();
+
+    // 2. Setup the shuffle timeline. Card offsets and rotations are derived
+    // from this single value so every card stays perfectly in sync.
     _shuffleController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 1850),
     );
-    _shuffleOffsetAnimation = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0.0, end: 15.0).chain(CurveTween(curve: Curves.easeInOut)), weight: 25),
-      TweenSequenceItem(tween: Tween(begin: 15.0, end: -15.0).chain(CurveTween(curve: Curves.easeInOut)), weight: 50),
-      TweenSequenceItem(tween: Tween(begin: -15.0, end: 0.0).chain(CurveTween(curve: Curves.easeInOut)), weight: 25),
-    ]).animate(_shuffleController);
 
     // 3. Setup 3D flip animation
     _flipController = AnimationController(
@@ -86,36 +81,118 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
       CurvedAnimation(parent: _flipController, curve: Curves.easeInOut),
     );
 
-    // 4. Start shuffle sound effects
-    _playShuffleSFX();
+    // 4. Start after the first frame so the stacked deck is visible before it
+    // fans out, shuffles, and deals.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _runShuffleAndDeal());
+  }
 
-    // 5. Run shuffle & deal staggered
-    _shuffleController.forward().then((_) {
-      if (mounted) {
-        setState(() {
-          _isShuffling = false;
-        });
-        _dealCardsStaggered();
+  void _generateCards() {
+    final List<String> types = [
+      'truth',
+      'truth',
+      'truth',
+      'dare',
+      'dare',
+      'dare',
+    ];
+    types.shuffle();
+
+    final coverStyles = <int>[];
+    for (var row = 0; row < 2; row++) {
+      final rowStyles = <int>[0, 1, 2]..shuffle();
+      coverStyles.addAll(rowStyles);
+    }
+
+    _cards.clear();
+    for (int i = 0; i < 6; i++) {
+      _cards.add(
+        GameCardState(index: i, type: types[i], coverStyle: coverStyles[i]),
+      );
+    }
+  }
+
+  ({Offset offset, double rotation, double scale}) _shuffleMotion(
+    int index,
+    double progress,
+  ) {
+    final side = index.isEven ? -1.0 : 1.0;
+    final depth = (index ~/ 2).toDouble();
+    final splitDistance = 28.0 + depth * 4;
+
+    if (progress < 0.28) {
+      final t = Curves.easeInOutCubic.transform(progress / 0.28);
+      return (
+        offset: Offset(
+          side * splitDistance * t,
+          (depth - 1) * 4 * t - math.sin(t * math.pi) * 8,
+        ),
+        rotation: side * 0.12 * t,
+        scale: 1 + math.sin(t * math.pi) * 0.03,
+      );
+    }
+
+    if (progress < 0.72) {
+      final t = (progress - 0.28) / 0.44;
+      final wave = math.cos(t * math.pi * 3);
+      final amplitude = 1 - 0.35 * t;
+      return (
+        offset: Offset(
+          side * splitDistance * wave * amplitude,
+          (depth - 1) * 3 +
+              math.sin(t * math.pi * 4 + index * 0.55) * 5 -
+              math.sin(t * math.pi * 3).abs() * 7,
+        ),
+        rotation: side * 0.11 * wave,
+        scale: 1 + math.sin(t * math.pi * 3).abs() * 0.025,
+      );
+    }
+
+    final t = Curves.easeInOutCubic.transform((progress - 0.72) / 0.28);
+    return (
+      offset: Offset(
+        -side * splitDistance * 0.65 * (1 - t) +
+            side * math.sin(t * math.pi) * 4,
+        (depth - 1) * 3 * (1 - t) - math.sin(t * math.pi) * 10,
+      ),
+      rotation: -side * 0.08 * (1 - t),
+      scale: 1 + math.sin(t * math.pi) * 0.04,
+    );
+  }
+
+  Future<void> _runShuffleAndDeal() async {
+    if (!mounted) return;
+    setState(() {
+      _isShuffling = true;
+      for (var i = 0; i < _dealtCards.length; i++) {
+        _dealtCards[i] = false;
       }
     });
+
+    _playShuffleSFX();
+    await _shuffleController.forward(from: 0);
+    if (!mounted) return;
+
+    setState(() => _isShuffling = false);
+    await _dealCardsStaggered();
   }
 
   void _playShuffleSFX() async {
-    for (int i = 0; i < 5; i++) {
-      await Future.delayed(Duration(milliseconds: 180 + i * 20));
+    for (int i = 0; i < 7; i++) {
+      await Future.delayed(Duration(milliseconds: i.isEven ? 150 : 195));
       if (mounted && _isShuffling) {
         AudioService.instance.playSFX('tap.mp3');
       }
     }
   }
 
-  void _dealCardsStaggered() async {
+  Future<void> _dealCardsStaggered() async {
     for (int i = 0; i < 6; i++) {
-      await Future.delayed(const Duration(milliseconds: 120));
+      await Future.delayed(const Duration(milliseconds: 105));
       if (mounted) {
         setState(() {
           _dealtCards[i] = true;
         });
+        HapticFeedback.selectionClick();
         AudioService.instance.playSFX('tap.mp3');
       }
     }
@@ -151,7 +228,7 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
     if (_isLocked) return;
     setState(() => _isLocked = true);
     AudioService.instance.playSFX('siren.mp3');
-    
+
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
         _onSkip();
@@ -181,8 +258,14 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
 
   void _onReroll() async {
     if (_isLocked) return;
-    final todProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
-    final contentProvider = Provider.of<GameContentProvider>(context, listen: false);
+    final todProvider = Provider.of<TruthOrDareProvider>(
+      context,
+      listen: false,
+    );
+    final contentProvider = Provider.of<GameContentProvider>(
+      context,
+      listen: false,
+    );
     final player = todProvider.currentPlayer;
     if (player == null || !todProvider.canReroll(player.id!)) return;
 
@@ -211,18 +294,32 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
       AudioService.instance.playSFX('tap.mp3');
     } else {
       setState(() => _isLocked = false);
-      AppNotification.error(context, 'Kho câu hỏi đã cạn, không thể đổi câu khác!');
+      AppNotification.error(
+        context,
+        'Kho câu hỏi đã cạn, không thể đổi câu khác!',
+      );
     }
   }
 
   // ─── Card Selection Tap Handler ──────────────────────────────────────────
   void _onCardTapped(int index) async {
-    if (_isShuffling || !_dealtCards.every((d) => d) || _selectedCardIndex != null || _isLocked) return;
+    if (_isShuffling ||
+        !_dealtCards.every((d) => d) ||
+        _selectedCardIndex != null ||
+        _isLocked) {
+      return;
+    }
 
     setState(() => _isLocked = true);
 
-    final contentProvider = Provider.of<GameContentProvider>(context, listen: false);
-    final todProvider = Provider.of<TruthOrDareProvider>(context, listen: false);
+    final contentProvider = Provider.of<GameContentProvider>(
+      context,
+      listen: false,
+    );
+    final todProvider = Provider.of<TruthOrDareProvider>(
+      context,
+      listen: false,
+    );
     final card = _cards[index];
 
     var content = await contentProvider.getRandomContent(
@@ -236,8 +333,11 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
 
     if (content == null) {
       contentProvider.resetUsedContents();
-      AppNotification.success(context, 'Các bạn chơi quá đỉnh, kho bài đã cạn! Hệ thống đang xáo lại bộ bài để cuộc vui tiếp tục nhé!');
-      
+      AppNotification.success(
+        context,
+        'Các bạn chơi quá đỉnh, kho bài đã cạn! Hệ thống đang xáo lại bộ bài để cuộc vui tiếp tục nhé!',
+      );
+
       content = await contentProvider.getRandomContent(
         card.type,
         categories: todProvider.currentCategories,
@@ -261,7 +361,10 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
       _flipController.forward();
     } else {
       setState(() => _isLocked = false);
-      AppNotification.error(context, 'Không tìm thấy câu hỏi/thử thách phù hợp! Hãy thử đổi cài đặt mức độ hoặc thể loại.');
+      AppNotification.error(
+        context,
+        'Không tìm thấy câu hỏi/thử thách phù hợp! Hãy thử đổi cài đặt mức độ hoặc thể loại.',
+      );
     }
   }
 
@@ -294,25 +397,9 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
                     _isTimerStarted = false;
                     _isLocked = false;
                     _flipController.reset();
-                    // Generate new set of cards
-                    final List<String> types = ['truth', 'truth', 'truth', 'dare', 'dare', 'dare'];
-                    types.shuffle();
-                    _cards.clear();
-                    for (int i = 0; i < 6; i++) {
-                      _cards.add(GameCardState(index: i, type: types[i]));
-                      _dealtCards[i] = false;
-                    }
-                    _isShuffling = true;
+                    _generateCards();
                   });
-                  _playShuffleSFX();
-                  _shuffleController.forward(from: 0.0).then((_) {
-                    if (mounted) {
-                      setState(() {
-                        _isShuffling = false;
-                      });
-                      _dealCardsStaggered();
-                    }
-                  });
+                  _runShuffleAndDeal();
                 },
               ),
         backgroundColor: Colors.transparent,
@@ -349,12 +436,21 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
                   shape: BoxShape.circle,
                   color: Colors.white,
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4)),
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
                   ],
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(40),
-                  child: RandomAvatar(player.name, trBackground: false, height: 72, width: 72),
+                  child: RandomAvatar(
+                    player.name,
+                    trBackground: false,
+                    height: 72,
+                    width: 72,
+                  ),
                 ),
               ),
             ),
@@ -399,46 +495,67 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
                       final double W = constraints.maxWidth;
                       final double H = constraints.maxHeight;
 
-                      const double spacingX = 14.0;
+                      // A 3 x 2 grid preserves the generated playing-card
+                      // artwork's 2:3 ratio instead of stretching it into tiles.
+                      const double spacingX = 10.0;
                       const double spacingY = 14.0;
 
-                      final double cellWidth = (W - spacingX) / 2;
-                      final double cellHeight = (H - spacingY * 2) / 3;
+                      final double cellWidth = (W - spacingX * 2) / 3;
+                      final double cellHeight = math
+                          .min((H - spacingY) / 2, cellWidth * 1.48)
+                          .toDouble();
+                      final double gridHeight = cellHeight * 2 + spacingY;
+                      final double gridTopInset = (H - gridHeight) / 2;
 
-                      final double centerLeft = (W - cellWidth) / 2;
-                      final double centerTop = (H - cellHeight) / 2;
+                      final double deckWidth = math
+                          .min(cellWidth * 1.18, W * 0.40)
+                          .toDouble();
+                      final double deckHeight = deckWidth * 1.48;
+                      final double deckLeft = (W - deckWidth) / 2;
+                      final double deckTop = (H - deckHeight) / 2;
+                      final double shuffleProgress = _shuffleController.value;
 
                       return Stack(
                         children: List.generate(6, (index) {
                           final card = _cards[index];
-                          final int row = index ~/ 2;
-                          final int col = index % 2;
+                          final int row = index ~/ 3;
+                          final int col = index % 3;
 
                           final double gridLeft = col * (cellWidth + spacingX);
-                          final double gridTop = row * (cellHeight + spacingY);
+                          final double gridTop =
+                              gridTopInset + row * (cellHeight + spacingY);
 
                           double left;
                           double top;
                           double width;
                           double height;
                           double opacity = 1.0;
+                          double rotation = 0;
+                          double scale = 1;
 
                           if (_selectedCardIndex == null) {
                             if (_isShuffling) {
-                              left = centerLeft + (index - 2.5) * _shuffleOffsetAnimation.value;
-                              top = centerTop;
-                              width = cellWidth;
-                              height = cellHeight;
+                              final motion = _shuffleMotion(
+                                index,
+                                shuffleProgress,
+                              );
+                              left = deckLeft + motion.offset.dx;
+                              top = deckTop + motion.offset.dy;
+                              width = deckWidth;
+                              height = deckHeight;
+                              rotation = motion.rotation;
+                              scale = motion.scale;
                             } else if (_dealtCards[index]) {
                               left = gridLeft;
                               top = gridTop;
                               width = cellWidth;
                               height = cellHeight;
                             } else {
-                              left = centerLeft;
-                              top = centerTop;
-                              width = cellWidth;
-                              height = cellHeight;
+                              left = deckLeft + (index - 2.5) * 0.9;
+                              top = deckTop - (index - 2.5) * 0.55;
+                              width = deckWidth;
+                              height = deckHeight;
+                              rotation = (index - 2.5) * 0.006;
                             }
                           } else {
                             if (_selectedCardIndex == index) {
@@ -455,24 +572,52 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
                             }
                           }
 
+                          final cardWidget = AnimatedOpacity(
+                            duration: const Duration(milliseconds: 300),
+                            opacity: opacity,
+                            child: Transform.scale(
+                              scale: scale,
+                              child: Transform.rotate(
+                                angle: rotation,
+                                child: IgnorePointer(
+                                  ignoring:
+                                      (_selectedCardIndex != null &&
+                                          _selectedCardIndex != index) ||
+                                      _isShuffling ||
+                                      !_dealtCards[index],
+                                  child: GestureDetector(
+                                    onTap: () => _onCardTapped(index),
+                                    child: _buildFlipCard(card, index),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+
+                          if (_isShuffling) {
+                            return Positioned(
+                              left: left,
+                              top: top,
+                              width: width,
+                              height: height,
+                              child: cardWidget,
+                            );
+                          }
+
                           return AnimatedPositioned(
-                            duration: const Duration(milliseconds: 500),
-                            curve: Curves.easeInOutCubic,
+                            duration: Duration(
+                              milliseconds: _selectedCardIndex == null
+                                  ? 430
+                                  : 520,
+                            ),
+                            curve: _selectedCardIndex == null
+                                ? Curves.easeOutBack
+                                : Curves.easeInOutCubic,
                             left: left,
                             top: top,
                             width: width,
                             height: height,
-                            child: AnimatedOpacity(
-                              duration: const Duration(milliseconds: 300),
-                              opacity: opacity,
-                              child: IgnorePointer(
-                                ignoring: _selectedCardIndex != null && _selectedCardIndex != index,
-                                child: GestureDetector(
-                                  onTap: () => _onCardTapped(index),
-                                  child: _buildFlipCard(card, index),
-                                ),
-                              ),
-                            ),
+                            child: cardWidget,
                           );
                         }),
                       );
@@ -489,10 +634,16 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
                   onPressed: () {
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (_) => const RandomPlayerScreen()),
+                      MaterialPageRoute(
+                        builder: (_) => const RandomPlayerScreen(),
+                      ),
                     );
                   },
-                  icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary, size: 22),
+                  icon: const Icon(
+                    Icons.refresh_rounded,
+                    color: AppColors.textSecondary,
+                    size: 22,
+                  ),
                   label: const Text(
                     'Đổi lượt',
                     style: TextStyle(
@@ -514,13 +665,14 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
   }
 
   Widget _buildFlipCard(GameCardState card, int index) {
+    final front = _buildCardFront(card);
     if (_selectedCardIndex == index) {
       return AnimatedBuilder(
         animation: _flipAnimation,
         builder: (context, child) {
           return FlipCardWidget(
             angle: _flipAnimation.value,
-            front: _buildCardFront(card),
+            front: front,
             back: _buildCardBack(card),
           );
         },
@@ -528,7 +680,7 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
     } else {
       return FlipCardWidget(
         angle: 0.0,
-        front: _buildCardFront(card),
+        front: front,
         back: _buildCardBack(card),
       );
     }
@@ -536,7 +688,7 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
 
   // ─── Card Front Side UI ──────────────────────────────────────────────────
   Widget _buildCardFront(GameCardState card) {
-    return CartoonCardFront(isTruth: card.type == 'truth', cardId: card.index.toString());
+    return PartyCardFront(coverStyle: card.coverStyle);
   }
 
   // ─── Card Back Side UI ───────────────────────────────────────────────────
@@ -545,129 +697,200 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
     if (content == null) {
       return Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFF1E202C), width: 3),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0xFF1E202C),
-              offset: Offset(4, 4),
-              blurRadius: 0,
-            ),
-          ],
+          color: const Color(0xFFFFFBF3),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFF079E9D), width: 2),
         ),
-        child: const Center(
-          child: CircularProgressIndicator(),
-        ),
+        child: const Center(child: CircularProgressIndicator()),
       );
     }
 
     final isTruth = card.type == 'truth';
-    final primaryColor = isTruth ? const Color(0xFFFF4B72) : const Color(0xFF368DFF);
+    final accentColor = isTruth
+        ? const Color(0xFF079E9D)
+        : const Color(0xFF6A35C8);
+    final badgeColor = isTruth
+        ? const Color(0xFF079E9D)
+        : const Color(0xFFFFC318);
+    final decorationColor = isTruth
+        ? const Color(0xFFFF5D50)
+        : const Color(0xFF6A35C8);
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF1E202C), width: 3),
-        boxShadow: const [
+        color: const Color(0xFFFFFBF3),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: accentColor, width: 2),
+        boxShadow: [
           BoxShadow(
-            color: Color(0xFF1E202C),
-            offset: Offset(6, 6),
-            blurRadius: 0,
+            color: const Color(0xFF1E202C).withValues(alpha: 0.08),
+            offset: const Offset(0, 8),
+            blurRadius: 16,
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Positioned(
+              left: 22,
+              top: 88,
+              child: Icon(Icons.star_rounded, size: 16, color: decorationColor),
+            ),
+            Positioned(
+              right: 22,
+              top: 150,
+              child: Container(
+                width: 8,
+                height: 8,
                 decoration: BoxDecoration(
-                  color: primaryColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: primaryColor.withOpacity(0.2), width: 1),
-                ),
-                child: Text(
-                  isTruth ? 'SỰ THẬT' : 'THỬ THÁCH',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                    color: primaryColor,
-                  ),
+                  color: accentColor,
+                  shape: BoxShape.circle,
                 ),
               ),
-              Consumer<GameContentProvider>(
-                builder: (context, contentProvider, _) {
-                  final isFav = contentProvider.favorites.any((c) => c.id == content.id);
-                  return GestureDetector(
-                    onTap: () {
-                      AudioService.instance.playSFX('tap.mp3');
-                      contentProvider.toggleFavorite(GameContent(
-                        id: content.id,
-                        content: content.content,
-                        type: content.type,
-                        level: content.level,
-                        isCustom: content.isCustom,
-                        isActive: content.isActive,
-                        isFavorite: isFav,
-                        penaltyText: content.penaltyText,
-                        points: content.points,
-                      ));
-                    },
-                    child: Icon(
-                      isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                      color: isFav ? const Color(0xFFFF4B72) : const Color(0xFF7D8398).withOpacity(0.5),
-                      size: 24,
+            ),
+            Positioned(
+              left: 28,
+              bottom: 92,
+              child: Container(
+                width: 7,
+                height: 7,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFFC318),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
+                  child: SizedBox(
+                    height: 48,
+                    child: Stack(
+                      alignment: Alignment.topCenter,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: badgeColor,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            isTruth ? 'SỰ THẬT' : 'THỬ THÁCH',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              color: isTruth
+                                  ? Colors.white
+                                  : const Color(0xFF1E202C),
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ),
+                        Align(
+                          alignment: Alignment.topRight,
+                          child: _buildFavoriteButton(content),
+                        ),
+                      ],
                     ),
-                  );
-                },
-              ),
-            ],
-          ),
-          const Spacer(flex: 2),
-          Expanded(
-            flex: 12,
-            child: Center(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Text(
-                  content.content,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF1E202C),
-                    height: 1.45,
                   ),
-                  textAlign: TextAlign.center,
                 ),
-              ),
-            ),
-          ),
-          const Spacer(flex: 2),
-          Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF2F4F7),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                'Chủ đề: ${_getCategoryDisplay(content)}',
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF7D8398),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 30),
+                    child: Center(
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: Text(
+                          content.content,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF1E202C),
+                            height: 1.42,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 13,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFBF3),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: accentColor, width: 1.5),
+                      ),
+                      child: Text(
+                        'Chủ đề: ${_getCategoryDisplay(content)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF343746),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  height: 28,
+                  child: CustomPaint(
+                    painter: CardZigzagPainter(color: accentColor),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildFavoriteButton(GameContent content) {
+    return Consumer<GameContentProvider>(
+      builder: (context, contentProvider, _) {
+        final isFav = contentProvider.favorites.any((c) => c.id == content.id);
+        return GestureDetector(
+          onTap: () {
+            AudioService.instance.playSFX('tap.mp3');
+            contentProvider.toggleFavorite(
+              GameContent(
+                id: content.id,
+                content: content.content,
+                type: content.type,
+                level: content.level,
+                category: content.category,
+                isCustom: content.isCustom,
+                isActive: content.isActive,
+                isFavorite: isFav,
+                penaltyText: content.penaltyText,
+                points: content.points,
+              ),
+            );
+          },
+          child: Icon(
+            isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+            color: isFav
+                ? const Color(0xFFFF5D50)
+                : const Color(0xFF7D8398).withValues(alpha: 0.65),
+            size: 28,
+          ),
+        );
+      },
     );
   }
 
@@ -683,7 +906,10 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
   // ─── Inline Game Controls Side UI ────────────────────────────────────────
   Widget _buildGameplayControls(TruthOrDareProvider todProvider) {
     final isTruth = todProvider.currentContent?.type == 'truth';
-    final primaryColor = isTruth ? const Color(0xFFFF4B72) : const Color(0xFF368DFF);
+    final primaryColor = isTruth
+        ? const Color(0xFF079E9D)
+        : const Color(0xFF6A35C8);
+    const dangerColor = Color(0xFFFF5D50);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -693,11 +919,11 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
             value: _timeLeft / todProvider.timeLimit,
-            backgroundColor: Colors.black.withOpacity(0.05),
+            backgroundColor: Colors.black.withValues(alpha: 0.05),
             valueColor: AlwaysStoppedAnimation<Color>(
-              !_isTimerStarted 
-                  ? Colors.grey.shade300 
-                  : (_timeLeft <= 5 ? const Color(0xFFFF4B72) : primaryColor),
+              !_isTimerStarted
+                  ? Colors.grey.shade300
+                  : (_timeLeft <= 5 ? dangerColor : primaryColor),
             ),
             minHeight: 6,
           ),
@@ -708,19 +934,21 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: !_isTimerStarted 
-                    ? Colors.white 
-                    : (_timeLeft <= 5 ? const Color(0xFFFF4B72) : Colors.white),
+                color: !_isTimerStarted
+                    ? Colors.white
+                    : (_timeLeft <= 5 ? dangerColor : Colors.white),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: !_isTimerStarted 
-                      ? AppColors.textSecondary.withOpacity(0.2)
-                      : (_timeLeft <= 5 ? Colors.transparent : primaryColor.withOpacity(0.3)),
+                  color: !_isTimerStarted
+                      ? AppColors.textSecondary.withValues(alpha: 0.2)
+                      : (_timeLeft <= 5
+                            ? Colors.transparent
+                            : primaryColor.withValues(alpha: 0.3)),
                   width: 1.5,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.02),
+                    color: Colors.black.withValues(alpha: 0.02),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),
@@ -732,7 +960,7 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
                   Icon(
                     Icons.access_time_filled_rounded,
                     color: !_isTimerStarted
-                        ? AppColors.textSecondary.withOpacity(0.6)
+                        ? AppColors.textSecondary.withValues(alpha: 0.6)
                         : (_timeLeft <= 5 ? Colors.white : primaryColor),
                     size: 18,
                   ),
@@ -743,8 +971,10 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
                       fontSize: 14,
                       fontWeight: FontWeight.w900,
                       color: !_isTimerStarted
-                          ? AppColors.textSecondary.withOpacity(0.6)
-                          : (_timeLeft <= 5 ? Colors.white : AppColors.textPrimary),
+                          ? AppColors.textSecondary.withValues(alpha: 0.6)
+                          : (_timeLeft <= 5
+                                ? Colors.white
+                                : AppColors.textPrimary),
                     ),
                   ),
                 ],
@@ -768,17 +998,11 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: isTruth
-                          ? [const Color(0xFFFF4B72), const Color(0xFFFF7292)]
-                          : [const Color(0xFF368DFF), const Color(0xFF68A9FF)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    color: primaryColor,
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: primaryColor.withOpacity(0.25),
+                        color: primaryColor.withValues(alpha: 0.22),
                         blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),
@@ -787,29 +1011,39 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
                   child: Center(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: !_isTimerStarted ? [
-                        const Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 18),
-                        const SizedBox(width: 6),
-                        const Text(
-                          'Tính giờ',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ] : [
-                        const Icon(Icons.star_rounded, color: Colors.white, size: 16),
-                        const SizedBox(width: 4),
-                        Text(
-                          '+${todProvider.rewardPoints} Hoàn thành',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
+                      children: !_isTimerStarted
+                          ? [
+                              const Icon(
+                                Icons.play_circle_fill_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 6),
+                              const Text(
+                                'Tính giờ',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ]
+                          : [
+                              const Icon(
+                                Icons.star_rounded,
+                                color: Colors.white,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '+${todProvider.rewardPoints} Hoàn thành',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
                     ),
                   ),
                 ),
@@ -825,10 +1059,7 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: primaryColor.withOpacity(0.4),
-                      width: 2,
-                    ),
+                    border: Border.all(color: dangerColor, width: 2),
                   ),
                   child: Center(
                     child: Text(
@@ -836,7 +1067,7 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w900,
-                        color: primaryColor,
+                        color: dangerColor,
                       ),
                     ),
                   ),
@@ -845,13 +1076,18 @@ class _TruthOrDareChoiceScreenState extends State<TruthOrDareChoiceScreen> with 
             ),
           ],
         ),
-        if (todProvider.currentPlayer != null && todProvider.canReroll(todProvider.currentPlayer!.id!))
+        if (todProvider.currentPlayer != null &&
+            todProvider.canReroll(todProvider.currentPlayer!.id!))
           Padding(
             padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
             child: Center(
               child: TextButton.icon(
                 onPressed: _onReroll,
-                icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary, size: 18),
+                icon: const Icon(
+                  Icons.refresh_rounded,
+                  color: AppColors.textSecondary,
+                  size: 18,
+                ),
                 label: const Text(
                   'Đổi câu khác (còn 1 lần)',
                   style: TextStyle(
@@ -902,173 +1138,70 @@ class FlipCardWidget extends StatelessWidget {
   }
 }
 
-class CartoonCardFront extends StatelessWidget {
-  final bool isTruth;
-  final String cardId;
-  
-  const CartoonCardFront({super.key, required this.isTruth, required this.cardId});
+class PartyCardFront extends StatelessWidget {
+  final int coverStyle;
+
+  const PartyCardFront({super.key, required this.coverStyle});
 
   @override
   Widget build(BuildContext context) {
-    final colors = [
-      const Color(0xFFF9C73D), // Yellow
-      const Color(0xFF4C9FAD), // Teal
-      const Color(0xFFA764FA), // Purple
-      const Color(0xFFF07B3F), // Orange
-      const Color(0xFF9CCC58), // Green
-      const Color(0xFFD43A67), // Pink/Red
+    const assets = [
+      'assets/images/truth_card.png',
+      'assets/images/dare_card.png',
+      'assets/images/star_card.png',
     ];
-    
-    // Pick color based on card ID
-    final colorIndex = cardId.hashCode.abs() % colors.length;
-    final bgColor = colors[colorIndex];
-    final ink = const Color(0xFF1E1E24);
 
-    return Container(
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
           BoxShadow(
-            color: Colors.black26,
-            offset: Offset(0, 6),
-            blurRadius: 0,
+            color: const Color(0xFF10162D).withValues(alpha: 0.28),
+            offset: const Offset(0, 9),
+            blurRadius: 18,
+            spreadRadius: -5,
           ),
         ],
       ),
-      child: Stack(
-        children: [
-          // Monster Face perfectly centered
-          Center(
-            child: SizedBox(
-              width: 140,
-              height: 120,
-              child: CustomPaint(
-                painter: MonsterFacePainter(),
-              ),
-            ),
-          ),
-          
-          // Top Tag
-          Positioned(
-            top: 15,
-            left: 0,
-            right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.only(left: 6, right: 14, top: 6, bottom: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black12, offset: Offset(0, 3), blurRadius: 0),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 22, 
-                        height: 22,
-                        decoration: BoxDecoration(color: ink, shape: BoxShape.circle),
-                        child: Center(
-                          child: Text(
-                            isTruth ? 'T' : 'D',
-                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        isTruth ? 'TRUTH' : 'DARE',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w900,
-                          color: ink,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Image.asset(
+          assets[coverStyle % assets.length],
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.high,
+        ),
       ),
     );
   }
 }
 
-class MonsterFacePainter extends CustomPainter {
+class CardZigzagPainter extends CustomPainter {
+  final Color color;
+
+  const CardZigzagPainter({required this.color});
+
   @override
   void paint(Canvas canvas, Size size) {
-    final ink = Paint()..color = const Color(0xFF1E1E24)..style = PaintingStyle.fill;
-    final blush = Paint()..color = Colors.black.withValues(alpha: 0.15)..style = PaintingStyle.fill;
-    final chin = Paint()
-      ..color = Colors.black.withValues(alpha: 0.1)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round;
+    const toothWidth = 22.0;
+    final top = size.height * 0.42;
+    final path = Path()..moveTo(0, top);
 
-    final w = size.width;
-    final h = size.height;
+    for (double x = 0; x < size.width; x += toothWidth) {
+      path
+        ..lineTo(x + toothWidth / 2, 0)
+        ..lineTo(x + toothWidth, top);
+    }
 
-    // Horns
-    // Left horn
-    Path leftHorn = Path();
-    leftHorn.moveTo(w * 0.35, h * 0.4); 
-    leftHorn.quadraticBezierTo(w * 0.15, h * 0.15, w * 0.25, h * 0.05); 
-    leftHorn.quadraticBezierTo(w * 0.35, h * 0.2, w * 0.45, h * 0.4);
-    canvas.drawPath(leftHorn, ink);
+    path
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
 
-    // Right horn
-    Path rightHorn = Path();
-    rightHorn.moveTo(w * 0.65, h * 0.4); 
-    rightHorn.quadraticBezierTo(w * 0.85, h * 0.15, w * 0.75, h * 0.05); 
-    rightHorn.quadraticBezierTo(w * 0.65, h * 0.2, w * 0.55, h * 0.4);
-    canvas.drawPath(rightHorn, ink);
-
-    // Eyes
-    canvas.drawCircle(Offset(w * 0.35, h * 0.55), w * 0.07, ink);
-    canvas.drawCircle(Offset(w * 0.65, h * 0.55), w * 0.07, ink);
-
-    // Blush
-    canvas.drawCircle(Offset(w * 0.20, h * 0.62), w * 0.05, blush);
-    canvas.drawCircle(Offset(w * 0.80, h * 0.62), w * 0.05, blush);
-
-    // Mouth
-    Path mouth = Path();
-    mouth.moveTo(w * 0.3, h * 0.7);
-    // Left fang
-    mouth.lineTo(w * 0.35, h * 0.8);
-    mouth.lineTo(w * 0.4, h * 0.72);
-    // Middle curve
-    mouth.quadraticBezierTo(w * 0.5, h * 0.68, w * 0.6, h * 0.72);
-    // Right fang
-    mouth.lineTo(w * 0.65, h * 0.8);
-    mouth.lineTo(w * 0.7, h * 0.7);
-    
-    // Bottom curve
-    mouth.quadraticBezierTo(w * 0.5, h * 1.05, w * 0.3, h * 0.7);
-    canvas.drawPath(mouth, ink);
-    
-    // Tongue inside mouth (We can clip it)
-    canvas.save();
-    canvas.clipPath(mouth);
-    final tonguePaint = Paint()..color = const Color(0xFFFF4B72)..style = PaintingStyle.fill;
-    canvas.drawCircle(Offset(w * 0.5, h * 0.95), w * 0.15, tonguePaint);
-    canvas.restore();
-    
-    // Chin shadow
-    Path chinPath = Path();
-    chinPath.moveTo(w * 0.42, h * 0.98);
-    chinPath.quadraticBezierTo(w * 0.5, h * 1.05, w * 0.58, h * 0.98);
-    canvas.drawPath(chinPath, chin);
+    canvas.drawPath(path, Paint()..color = color);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CardZigzagPainter oldDelegate) {
+    return oldDelegate.color != color;
+  }
 }
